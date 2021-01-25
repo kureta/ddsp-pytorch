@@ -1,9 +1,9 @@
-import torch
+import sys
+
 import torch.nn as nn
 import torchaudio
-import os, sys
+
 from .utils import *
-import numpy as np
 
 
 class ConvBlock(nn.Module):
@@ -108,7 +108,7 @@ class CREPE(nn.Module):
         device = self.linear.weight.device
 
         for i in range(0, len(frames), batch_size):
-            f = frames[i : min(i + batch_size, len(frames))]
+            f = frames[i: min(i + batch_size, len(frames))]
             f = f.to(device)
             act = self.forward(f)
             activation_stack.append(act.cpu())
@@ -116,27 +116,28 @@ class CREPE(nn.Module):
         return activation
 
     def predict(self, audio, sr, viterbi=False, center=True, step_size=10, batch_size=128):
-        activation = self.get_activation(audio, sr, batch_size=batch_size, step_size=step_size)
+        activation = self.get_activation(audio, sr, batch_size=batch_size, step_size=step_size, center=center)
         frequency = to_freq(activation, viterbi=viterbi)
         confidence = activation.max(dim=1)[0]
         time = torch.arange(confidence.shape[0]) * step_size / 1000.0
         return time, frequency, confidence, activation
 
     def process_file(
-        self,
-        file,
-        output=None,
-        viterbi=False,
-        center=True,
-        step_size=10,
-        save_plot=False,
-        batch_size=128,
+            self,
+            file,
+            output=None,
+            viterbi=False,
+            center=True,
+            step_size=10,
+            save_plot=False,
+            batch_size=128,
     ):
         try:
             audio, sr = torchaudio.load(file)
         except ValueError:
             print("CREPE-pytorch : Could not read", file, file=sys.stderr)
 
+        print(audio.shape)
         with torch.no_grad():
             time, frequency, confidence, activation = self.predict(
                 audio,
@@ -171,8 +172,8 @@ class CREPE(nn.Module):
             from imageio import imwrite
 
             plot_file = (
-                os.path.join(output, os.path.basename(os.path.splitext(file)[0]))
-                + ".activation.png"
+                    os.path.join(output, os.path.basename(os.path.splitext(file)[0]))
+                    + ".activation.png"
             )
             # to draw the low pitches in the bottom
             salience = np.flip(activation, axis=1)

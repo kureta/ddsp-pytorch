@@ -73,7 +73,8 @@ class LoudnessExtractor(nn.Module):
             output_signal : batch of reverberated signals
         """
         
-        input_signal = z['audio']
+        # input_signal = z['audio']
+        input_signal = z
         paded_input_signal = nn.functional.pad(input_signal, (self.frame_length * 2, self.frame_length * 2))
         sliced_signal = paded_input_signal.unfold(1, self.n_fft, self.frame_length)
         sliced_windowed_signal = sliced_signal * self.smoothing_window
