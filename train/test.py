@@ -14,7 +14,7 @@ import torchaudio
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
-from train.network.autoencoder.autoencoder import AutoEncoder
+from model.autoencoder.autoencoder import AutoEncoder
 from omegaconf import OmegaConf
 
 import argparse
