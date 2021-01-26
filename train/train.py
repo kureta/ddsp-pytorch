@@ -1,9 +1,6 @@
 import torch
-import torch.nn as nn
-import torchaudio
 from omegaconf import OmegaConf
-import sys, os, tqdm, glob
-import numpy as np
+import sys, os, glob
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
 from torch.utils.data.dataloader import DataLoader
@@ -12,8 +9,8 @@ import torch.optim as optim
 from trainer.trainer import Trainer
 from trainer.io import setup, set_seeds
 
-from dataset.audiodata import SupervisedAudioData, AudioData
-from network.autoencoder.autoencoder import AutoEncoder
+from dataset.audiodata import SupervisedAudioData
+from model.autoencoder.autoencoder import AutoEncoder
 from loss.mss_loss import MSSLoss
 from optimizer.radam import RAdam
 

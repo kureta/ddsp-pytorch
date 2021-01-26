@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from components.loudness_extractor import LoudnessExtractor
-from components.ptcrepe.ptcrepe.crepe import CREPE
+from model.ddsp.loudness_extractor import LoudnessExtractor
+from model.ptcrepe.crepe import CREPE
 from rt.nodes.base_nodes import BaseNode
 
 
@@ -26,10 +26,9 @@ class PitchTracker(BaseNode):
     def task(self):
         with torch.no_grad():
             buffer = torch.from_numpy(self.buffer[np.newaxis, :]).cuda()
-            _, freq, confidence, _ = self.cr.predict(
+            freq, confidence, _ = self.cr.predict(
                 buffer,
                 48000,
-                viterbi=False,
                 center=True,
                 step_size=10,
                 batch_size=128

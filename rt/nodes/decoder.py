@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 from rt.nodes.base_nodes import BaseNode
-from train.network.autoencoder.autoencoder import AutoEncoder
+from model.autoencoder.autoencoder import AutoEncoder
 
 CONF_PATH = '/home/kureta/Documents/ddsp-pytorch-pretrained/weight/200220.pth.yaml'
 WEIGHTS_PATH = '/home/kureta/Documents/ddsp-pytorch-pretrained/weight/200220.pth'

@@ -10,6 +10,7 @@ dependencies:
 - cudatoolkit=11.0
 - cudnn
 - pytorch
+- pytorch-lightning
 - torchvision
 - torchaudio
 - omegaconf
