@@ -136,7 +136,10 @@ class Decoder(nn.Module):
         else:
             latent = torch.cat((latent_f0, latent_loudness), dim=-1)
 
-        latent, (h) = self.gru(latent)
+        if 'hidden' in batch:
+            latent, h = self.gru(latent, batch['hidden'])
+        else:
+            latent, h = self.gru(latent)
         latent = self.mlp_gru(latent)
 
         amplitude = self.dense_harmonic(latent)
@@ -152,7 +155,7 @@ class Decoder(nn.Module):
 
         c = c.permute(0, 2, 1)  # to match the shape of harmonic oscillator's input.
 
-        return dict(f0=batch["f0"], a=a, c=c, H=H)
+        return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
 
     @staticmethod
     def modified_sigmoid(a):

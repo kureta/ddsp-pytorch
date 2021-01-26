@@ -4,8 +4,8 @@ import torch.nn as nn
 from components.harmonic_oscillator import HarmonicOscillator
 from components.reverb import TrainableFIRReverb
 from components.filtered_noise import FilteredNoise
-from network.autoencoder.decoder import Decoder
-from network.autoencoder.encoder import Encoder
+from train.network.autoencoder.decoder import Decoder
+from train.network.autoencoder.encoder import Encoder
 
 
 class AutoEncoder(nn.Module):
@@ -101,7 +101,7 @@ class AutoEncoder(nn.Module):
             time, f0, confidence, activation = self.crepe.predict(
                 x,
                 sr=sample_rate,
-                viterbi=True,
+                viterbi=False,
                 step_size=int(self.config.frame_resolution * 1000),
                 batch_size=32,
             )

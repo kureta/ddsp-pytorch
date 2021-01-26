@@ -12,6 +12,9 @@ dependencies:
 - pytorch
 - torchvision
 - torchaudio
+- omegaconf
+- tqdm
+- tensorboardX
 - pip
 - pip:
   - python-osc

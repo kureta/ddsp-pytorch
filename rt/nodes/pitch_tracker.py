@@ -7,18 +7,20 @@ from rt.nodes.base_nodes import BaseNode
 
 
 class PitchTracker(BaseNode):
-    def __init__(self, buffer, freq, confidence, amp):
+    def __init__(self, buffer, freq, confidence, loudness):
         super().__init__()
 
         self.cr = self.le = None
         self.buffer = buffer
         self.freq = freq
         self.confidence = confidence
-        self.amp = amp
+        self.loudness = loudness
 
     def setup(self):
         self.cr = CREPE('medium').cuda()
         self.le = LoudnessExtractor().cuda()
+        self.cr.eval()
+        self.le.eval()
         self.buffer = np.frombuffer(self.buffer, dtype='float32')
 
     def task(self):
@@ -32,9 +34,9 @@ class PitchTracker(BaseNode):
                 step_size=10,
                 batch_size=128
             )
-            amp = self.le(buffer)
+            loudness = self.le({'audio': buffer})
 
         # TODO: alignment or synchronization or something.
         self.freq.value = freq[-1]
         self.confidence.value = confidence[-1]
-        self.amp.value = amp[0, -1]
+        self.loudness.value = loudness[0, -1]
