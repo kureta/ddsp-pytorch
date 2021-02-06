@@ -1,76 +1,52 @@
-"""
-2020_01_15 - 2020_01_29
-Harmonic Oscillator model for DDSP decoder.
-TODO : 
-    upsample + interpolation 
-"""
-
 import numpy as np
 import torch
 import torch.nn as nn
 
 
-class HarmonicOscillator(nn.Module):
-    def __init__(self, sr=16000, frame_length=64, attenuate_gain=0.02, device="cuda"):
-        super(HarmonicOscillator, self).__init__()
-        self.sr = sr
-        self.frame_length = frame_length
-        self.attenuate_gain = attenuate_gain
+class OscillatorBank(nn.Module):
+    def __init__(self, n_harmonics: int = 100, sample_rate: int = 44100, hop_size: int = 64):
+        super().__init__()
 
-        self.device = device
+        self.n_harmonics = n_harmonics
+        self.sample_rate = sample_rate
+        self.hop_size = hop_size
 
-        self.framerate_to_audiorate = nn.Upsample(
-            scale_factor=self.frame_length, mode="linear", align_corners=False
-        )
+        self.harmonics = nn.Parameter(torch.arange(1, self.n_harmonics + 1, step=1), requires_grad=False)
+        self.last_phases = nn.Parameter(torch.zeros_like(self.harmonics), requires_grad=False)
 
-    def forward(self, z):
+    def forward(self,
+                f0: torch.Tensor,
+                loudness: torch.Tensor,
+                harm_amps: torch.Tensor,
+                harm_stretch: torch.Tensor):
+        harmonics = self.harmonics ** (1. + harm_stretch)
+        harmonics *= f0  # Hz (cycles per second)
+        # zero out above nyquist
+        harm_amps[harmonics > self.sample_rate // 2] = 0.
 
-        """
-        Compute Addictive Synthesis
-        Argument: 
-            z['f0'] : fundamental frequency envelope for each sample
-                - dimension (batch_num, frame_rate_time_samples)
-            z['c'] : harmonic distribution of partials for each sample 
-                - dimension (batch_num, partial_num, frame_rate_time_samples)
-            z['a'] : loudness of entire sound for each sample
-                - dimension (batch_num, frame_rate_time_samples)
-        Returns:
-            addictive_output : synthesized sinusoids for each sample 
-                - dimension (batch_num, audio_rate_time_samples)
-        """
+        harmonics *= 2 * np.pi  # radians per second
+        harmonics /= self.sample_rate  # radians per sample
 
-        fundamentals = z["f0"]
-        framerate_c_bank = z["c"]
+        harmonics = harmonics.repeat(self.hop_size, 1)
+        harmonics[0, :] += self.last_phases  # phase offset from last sample
+        phases = torch.cumsum(harmonics, dim=0)
+        phases %= 2 * np.pi
 
-        num_osc = framerate_c_bank.shape[1]
+        self.last_phases.data = phases[-1, :]
 
-        # Build a frequency envelopes of each partials from z['f0'] data
-        partial_mult = (
-            torch.linspace(1, num_osc, num_osc, dtype=torch.float32).unsqueeze(-1).to(self.device)
-        )
-        framerate_f0_bank = (
-            fundamentals.unsqueeze(-1).expand(-1, -1, num_osc).transpose(1, 2) * partial_mult
-        )
+        signal = loudness * harm_amps * torch.sin(phases)
+        signal = torch.sum(signal, dim=1) / self.n_harmonics
 
-        # Antialias z['c']
-        mask_filter = (framerate_f0_bank < self.sr / 2).float()
-        antialiased_framerate_c_bank = framerate_c_bank * mask_filter
+        return signal
 
-        # Upsample frequency envelopes and build phase bank
-        audiorate_f0_bank = self.framerate_to_audiorate(framerate_f0_bank)
-        audiorate_phase_bank = torch.cumsum(audiorate_f0_bank / self.sr, 2)
+    def live(self,
+             f0: torch.Tensor,
+             loudness: torch.Tensor,
+             harm_amps: torch.Tensor,
+             harm_stretch: torch.Tensor):
+        f0 = f0.unsqueeze(0).unsqueeze(0)
+        loudness = loudness.unsqueeze(0).unsqueeze(0)
+        harm_amps = harm_amps.unsqueeze(0).unsqueeze(0)
+        harm_stretch = harm_stretch.unsqueeze(0).unsqueeze(0)
 
-        # Upsample amplitude envelopes
-        audiorate_a_bank = self.framerate_to_audiorate(antialiased_framerate_c_bank)
-
-        # Build harmonic sinusoid bank and sum to build harmonic sound
-        sinusoid_bank = (
-            torch.sin(2 * np.pi * audiorate_phase_bank) * audiorate_a_bank * self.attenuate_gain
-        )
-
-        framerate_loudness = z["a"]
-        audiorate_loudness = self.framerate_to_audiorate(framerate_loudness.unsqueeze(0)).squeeze(0)
-
-        addictive_output = torch.sum(sinusoid_bank, 1) * audiorate_loudness
-
-        return addictive_output
+        return self.forward(f0, loudness, harm_amps, harm_stretch)
