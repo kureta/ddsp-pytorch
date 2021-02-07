@@ -63,8 +63,8 @@ class JackOut(threading.Thread):
         if not playback:
             raise RuntimeError('No physical playback ports')
 
-        for src, dest in zip(self.client.outports, playback):
-            self.client.connect(src, dest)
+        for dest in playback:
+            self.client.connect(self.client.outports[0], dest)
 
     def task(self):
         print('JACK is processing...')
