@@ -115,7 +115,7 @@ class Synth(BaseNode):
         self.t_harmonics = torch.from_numpy(self.harmonics).cuda()
 
         with torch.no_grad():
-            audio = self.additive(self.t_freq, self.t_amp, self.t_harmonics, self.t_harm_stretch)
+            audio = self.additive.live(self.t_freq, self.t_amp, self.t_harmonics, self.t_harm_stretch)
         self.output_buffer[:] = audio.cpu().numpy()
 
 

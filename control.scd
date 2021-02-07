@@ -6,7 +6,7 @@ s.quit;
 
 	amp = MouseY.kr();
 	freq = MouseX.kr(55, 1760, 1);
-	stretch = amp / 1000;
+	stretch = amp / 50;
 	trig = Impulse.kr(256);
 
 	SendReply.kr(trig, '/controls/amp', amp);

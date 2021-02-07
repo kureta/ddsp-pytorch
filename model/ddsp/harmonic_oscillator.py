@@ -19,24 +19,33 @@ class OscillatorBank(nn.Module):
                 loudness: torch.Tensor,
                 harm_amps: torch.Tensor,
                 harm_stretch: torch.Tensor):
+        harmonics = self.prepare_harmonics(f0, harm_amps, harm_stretch)
+        phases = self.generate_phases(harmonics)
+        signal = self.generate_signal(harm_amps, loudness, phases)
+
+        return signal
+
+    def prepare_harmonics(self, f0, harm_amps, harm_stretch):
         harmonics = self.harmonics ** (1. + harm_stretch)
         harmonics *= f0  # Hz (cycles per second)
         # zero out above nyquist
         harm_amps[harmonics > self.sample_rate // 2] = 0.
-
         harmonics *= 2 * np.pi  # radians per second
         harmonics /= self.sample_rate  # radians per sample
+        harmonics = harmonics.repeat_interleave(self.hop_size, 1)
+        return harmonics
 
-        harmonics = harmonics.repeat(self.hop_size, 1)
-        harmonics[0, :] += self.last_phases  # phase offset from last sample
-        phases = torch.cumsum(harmonics, dim=0)
+    @staticmethod
+    def generate_phases(harmonics):
+        phases = torch.cumsum(harmonics, dim=1)
         phases %= 2 * np.pi
+        return phases
 
-        self.last_phases.data = phases[-1, :]
-
+    def generate_signal(self, harm_amps, loudness, phases):
+        loudness = loudness.repeat_interleave(self.hop_size, 1)
+        harm_amps = harm_amps.repeat_interleave(self.hop_size, 1)
         signal = loudness * harm_amps * torch.sin(phases)
-        signal = torch.sum(signal, dim=1) / self.n_harmonics
-
+        signal = torch.sum(signal, dim=2) / self.n_harmonics
         return signal
 
     def live(self,
@@ -49,4 +58,10 @@ class OscillatorBank(nn.Module):
         harm_amps = harm_amps.unsqueeze(0).unsqueeze(0)
         harm_stretch = harm_stretch.unsqueeze(0).unsqueeze(0)
 
-        return self.forward(f0, loudness, harm_amps, harm_stretch)
+        harmonics = self.prepare_harmonics(f0, harm_amps, harm_stretch)
+        harmonics[0, 0, :] += self.last_phases  # phase offset from last sample
+        phases = self.generate_phases(harmonics)
+        self.last_phases.data = phases[0, -1, :]  # update phase offset
+        signal = self.generate_signal(harm_amps, loudness, phases)
+
+        return signal.squeeze(0).squeeze(0)
