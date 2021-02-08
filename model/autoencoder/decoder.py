@@ -164,4 +164,3 @@ class Decoder(nn.Module):
         a = a.mul(2.0)
         a.add_(1e-7)
         return a
-
