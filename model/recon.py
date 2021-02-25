@@ -1,6 +1,8 @@
 import glob
 import os
 
+import numpy as np
+import soundfile
 import torch
 import torch.fft
 import torch.nn.functional as F  # noqa
@@ -31,6 +33,7 @@ class AudioData(Dataset):
 
         audios = []
         magnitude_spectrums = []
+        window = torch.hann_window(1024)
         print('Processing audio files...')
         for f in tqdm(files):
             y, sr = torchaudio.load(f, )
@@ -51,7 +54,7 @@ class AudioData(Dataset):
             # make non-overlapping windows
             y = y.unfold(0, sr * 2, sr)
             audios.append(y)
-            spec = torch.stft(y, n_fft=1024, hop_length=256, window=torch.hann_window(1024))
+            spec = torch.stft(y, n_fft=1024, hop_length=256, window=window)
             spec = spec.pow(2.).sum(-1).pow(0.5)
             magnitude_spectrums.append(spec)
         # concatenate all tracks
@@ -78,16 +81,18 @@ class Recon(nn.Module):
             batch_first=True,
             bidirectional=False,
         )
-        self.post_mpl = MLP(256, 513, 3)
+        self.gru_activation = nn.ReLU()
+        self.post_mpl = MLP(256, 513, 2)
         self.output = nn.Linear(513, 513)
-        self.output_activation = nn.Tanh()
+        # self.output_activation = nn.Sigmoid()
 
     def forward(self, x):
         latent = self.pre_mpl(x)
         latent, _ = self.gru(latent)
+        latent = self.gru_activation(latent)
         latent = self.post_mpl(latent)
         out = self.output(latent)
-        out = self.output_activation(out)
+        out = torch.tanh(out) * np.pi
 
         return out
 
@@ -97,9 +102,10 @@ class PhaseRecon(pl.LightningModule):
         super().__init__()
         self.network = Recon()
         self.loss = MSSLoss([1024, 512, 256], alpha=1.0, overlap=0.75)
-        self.twopi = nn.Parameter(
-            torch.ones(1) * torch.acos(torch.zeros(1)).item() * 4,
-            requires_grad=False)
+        self.window = nn.Parameter(
+            torch.hann_window(1024),
+            requires_grad=False
+        )
 
     def forward(self, x):
         return self.network(x)
@@ -110,26 +116,46 @@ class PhaseRecon(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         magnitude_spectrum, audio = batch
-        phases = self(magnitude_spectrum) * self.twopi
+        phases = self(magnitude_spectrum)
         phases = phases.permute(0, 2, 1)
         magnitude_spectrum = magnitude_spectrum.permute(0, 2, 1)
-        complex_stft = magnitude_spectrum * (torch.cos(phases) + 1j * torch.sin(phases))
+        stft_re = magnitude_spectrum * torch.cos(phases)
+        stft_im = magnitude_spectrum * torch.sin(phases)
+        complex_stft = torch.stack((stft_re, stft_im), dim=-1)
         audio_hat = torch.istft(complex_stft,
                                 n_fft=1024,
                                 hop_length=256,
-                                window=torch.hann_window(1024),
+                                window=self.window,
                                 length=audio.shape[-1],
                                 )
         loss = self.loss(audio_hat, audio)
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        magnitude_spectrum, audio = batch
+        phases = self(magnitude_spectrum)
+        phases = phases.permute(0, 2, 1)
+        magnitude_spectrum = magnitude_spectrum.permute(0, 2, 1)
+        stft_re = magnitude_spectrum * torch.cos(phases)
+        stft_im = magnitude_spectrum * torch.sin(phases)
+        complex_stft = torch.stack((stft_re, stft_im), dim=-1)
+        audio_hat = torch.istft(complex_stft,
+                                n_fft=1024,
+                                hop_length=256,
+                                window=self.window,
+                                length=audio.shape[-1],
+                                )
+        for idx, audio in enumerate(audio_hat):
+            soundfile.write(f'/home/kureta/Music/junk/shit/{batch_idx}-{idx}.wav', audio.cpu().numpy(), 44100, 'PCM_24')
+
 
 def train():
     dataset = AudioData('/home/kureta/Music/violin')
-    train_loader = DataLoader(dataset, batch_size=16)
+    train_loader = DataLoader(dataset, batch_size=16, num_workers=4, shuffle=True)
     phase_recon = PhaseRecon()
-    trainer = pl.Trainer()
-    trainer.fit(phase_recon, train_loader)
+    trainer = pl.Trainer(gpus=1, limit_val_batches=0.01,
+                         resume_from_checkpoint='lightning_logs/version_23/checkpoints/epoch=170-step=72060.ckpt')
+    trainer.fit(phase_recon, train_loader, train_loader)
 
 
 if __name__ == '__main__':
