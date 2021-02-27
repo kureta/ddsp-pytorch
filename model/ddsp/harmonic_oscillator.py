@@ -2,38 +2,40 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from config.default import Config
+
+default = Config()
+
 
 class OscillatorBank(nn.Module):
-    def __init__(self, n_harmonics: int = 100, sample_rate: int = 44100, hop_size: int = 64):
+    def __init__(self, conf=default):
         super().__init__()
 
-        self.n_harmonics = n_harmonics
-        self.sample_rate = sample_rate
-        self.hop_size = hop_size
+        self.n_harmonics = conf.n_harmonics
+        self.sample_rate = conf.sample_rate
+        self.hop_size = conf.hop_length
 
         self.harmonics = nn.Parameter(torch.arange(1, self.n_harmonics + 1, step=1), requires_grad=False)
         self.last_phases = nn.Parameter(torch.zeros_like(self.harmonics), requires_grad=False)
 
-    def forward(self,
-                f0: torch.Tensor,
-                loudness: torch.Tensor,
-                harm_amps: torch.Tensor,
-                harm_stretch: torch.Tensor):
-        harmonics = self.prepare_harmonics(f0, harm_amps, harm_stretch)
+    def forward(self, x):
+        harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
         phases = self.generate_phases(harmonics)
-        signal = self.generate_signal(harm_amps, loudness, phases)
+        signal = self.generate_signal(harm_amps, x['loudness'], phases)
 
         return signal
 
     def prepare_harmonics(self, f0, harm_amps, harm_stretch):
         harmonics = self.harmonics ** (1. + harm_stretch)
-        harmonics *= f0  # Hz (cycles per second)
+        # Hz (cycles per second)
+        harmonics = harmonics.unsqueeze(0).unsqueeze(0).repeat(f0.shape[0], f0.shape[1], 1) * f0
         # zero out above nyquist
-        harm_amps[harmonics > self.sample_rate // 2] = 0.
+        mask = harmonics > self.sample_rate // 2
+        harm_amps = harm_amps.masked_fill(mask, 0.)
         harmonics *= 2 * np.pi  # radians per second
         harmonics /= self.sample_rate  # radians per sample
         harmonics = harmonics.repeat_interleave(self.hop_size, 1)
-        return harmonics
+        return harmonics, harm_amps
 
     @staticmethod
     def generate_phases(harmonics):
@@ -48,6 +50,7 @@ class OscillatorBank(nn.Module):
         signal = torch.sum(signal, dim=2) / self.n_harmonics
         return signal
 
+    # TODO: fixing training broke live
     def live(self,
              f0: torch.Tensor,
              loudness: torch.Tensor,
