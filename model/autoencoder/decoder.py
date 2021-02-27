@@ -6,6 +6,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from config.default import Config
+
+
+default = Config()
+
 
 class MLP(nn.Module):
     """
@@ -26,7 +31,7 @@ class MLP(nn.Module):
     output(x): torch.tensor w/ (B, ..., n_units)
     """
 
-    def __init__(self, n_input, n_units, n_layer, relu=nn.ReLU, inplace=True):
+    def __init__(self, n_input, n_units, n_layer, relu=nn.ReLU, inplace=False):
         super().__init__()
         self.n_layer = n_layer
         self.n_input = n_input
@@ -70,7 +75,6 @@ class Decoder(nn.Module):
         n_harmonics: 101
         n_freq: 65
         gru_units: 512
-        bidirectional: False
 
     input(dict(f0, z(optional), l)) : a dict object which contains key-values below
         f0 : fundamental frequency for each frame. torch.tensor w/ shape(B, time)
@@ -86,43 +90,43 @@ class Decoder(nn.Module):
         H : noise filter in frequency domain. torch.tensor w/ shape(B, frame_num, filter_coeff_length)
     """
 
-    def __init__(self, config):
+    def __init__(self, config=default):
         super().__init__()
 
         self.config = config
 
-        self.mlp_f0 = MLP(n_input=1, n_units=config.mlp_units, n_layer=config.mlp_layers)
-        self.mlp_loudness = MLP(n_input=1, n_units=config.mlp_units, n_layer=config.mlp_layers)
+        self.mlp_f0 = MLP(n_input=1, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers)
+        self.mlp_loudness = MLP(n_input=1, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers)
         if config.use_z:
             self.mlp_z = MLP(
-                n_input=config.z_units, n_units=config.mlp_units, n_layer=config.mlp_layers
+                n_input=config.z_units, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers
             )
             self.num_mlp = 3
         else:
             self.num_mlp = 2
 
         self.gru = nn.GRU(
-            input_size=self.num_mlp * config.mlp_units,
-            hidden_size=config.gru_units,
+            input_size=self.num_mlp * config.decoder_mlp_units,
+            hidden_size=config.decoder_gru_units,
             num_layers=1,
             batch_first=True,
-            bidirectional=config.bidirectional,
         )
 
         self.mlp_gru = MLP(
-            n_input=config.gru_units * 2 if config.bidirectional else config.gru_units,
-            n_units=config.mlp_units,
-            n_layer=config.mlp_layers,
-            inplace=True,
+            n_input=config.decoder_gru_units,
+            n_units=config.decoder_mlp_units,
+            n_layer=config.decoder_mlp_layers,
+            inplace=False,
         )
 
         # one element for overall loudness
-        self.dense_harmonic = nn.Linear(config.mlp_units, config.n_harmonics + 1)
-        self.dense_filter = nn.Linear(config.mlp_units, config.n_freq)
+        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics)
+        self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
+        # self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
     def forward(self, batch):
-        f0 = batch["f0"].unsqueeze(-1)
-        loudness = batch["loudness"].unsqueeze(-1)
+        f0 = batch["f0"]
+        loudness = batch["loudness"]
 
         if self.config.use_z:
             z = batch["z"]
@@ -142,20 +146,14 @@ class Decoder(nn.Module):
             latent, h = self.gru(latent)
         latent = self.mlp_gru(latent)
 
-        amplitude = self.dense_harmonic(latent)
+        c = F.softmax(self.dense_harmonic(latent))
+        a = Decoder.modified_sigmoid(self.dense_loudness(latent))
 
-        a = amplitude[..., 0]
-        a = Decoder.modified_sigmoid(a)
+        # H = self.dense_filter(latent)
+        # H = Decoder.modified_sigmoid(H)
 
-        # a = torch.sigmoid(amplitude[..., 0])
-        c = F.softmax(amplitude[..., 1:], dim=-1)
-
-        H = self.dense_filter(latent)
-        H = Decoder.modified_sigmoid(H)
-
-        c = c.permute(0, 2, 1)  # to match the shape of harmonic oscillator's input.
-
-        return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
+        # return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
+        return dict(f0=batch["f0"], a=a, c=c, hidden=h, loudness=batch['loudness'])
 
     @staticmethod
     def modified_sigmoid(a):

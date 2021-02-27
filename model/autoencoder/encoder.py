@@ -1,111 +1,73 @@
-import torchaudio
+import torch
 import torch.nn as nn
-from model.ddsp.loudness_extractor import LoudnessExtractor
+import torchaudio
+
+from config.default import Config
+from model.autoencoder.decoder import MLP
+
+default = Config()
 
 
-class ZEncoder(nn.Module):
-    def __init__(
-        self,
-        n_fft,
-        hop_length,
-        sample_rate=16000,
-        n_mels=128,
-        n_mfcc=30,
-        gru_units=512,
-        z_units=16,
-        bidirectional=False,
-    ):
+# TODO: keep track of GRU hidden states for live
+class FeatureEncoder(nn.Module):
+    def __init__(self, n_features=1, conf=default):
         super().__init__()
         self.mfcc = torchaudio.transforms.MFCC(
-            sample_rate=sample_rate,
-            n_mfcc=n_mfcc,
+            sample_rate=conf.sample_rate,
+            n_mfcc=conf.n_mfcc,
             log_mels=True,
             melkwargs=dict(
-                n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, f_min=20.0, f_max=8000.0,
+                n_fft=conf.n_fft,
+                hop_length=conf.hop_length,
+                n_mels=conf.n_mels,
+                f_min=conf.f_min,
+                f_max=conf.f_max
             ),
         )
 
-        self.norm = nn.InstanceNorm1d(n_mfcc, affine=True)
-        self.permute = lambda x: x.permute(0, 2, 1)
+        # self.norm = nn.InstanceNorm1d(conf.n_mfcc, affine=True)
+
         self.gru = nn.GRU(
-            input_size=n_mfcc,
-            hidden_size=gru_units,
+            input_size=conf.n_mfcc,
+            hidden_size=conf.encoder_gru_units,
             num_layers=1,
             batch_first=True,
-            bidirectional=bidirectional,
         )
-        self.dense = nn.Linear(gru_units * 2 if bidirectional else gru_units, z_units)
+        # self.mlp = MLP(conf.n_mfcc, 512, 3)
+        self.dense = nn.Linear(conf.encoder_gru_units, n_features)
 
-    def forward(self, batch):
-        x = batch["audio"]
+    def forward(self, x):
         x = self.mfcc(x)
-        x = x[:, :, :-1]
-        x = self.norm(x)
-        x = self.permute(x)
+        # x = self.norm(x)
+        x = x.permute(0, 2, 1)
         x, _ = self.gru(x)
+        # x = self.mlp(x)
         x = self.dense(x)
         return x
 
 
 class Encoder(nn.Module):
-    """
-    Encoder. 
-
-    contains: Z_encoder, loudness extractor
-
-    Constructor arguments:
-        use_z : Bool, if True, Encoder will produce z as output.
-        sample_rate=16000,
-        z_units=16,
-        n_fft=2048,
-        n_mels=128,
-        n_mfcc=30,
-        gru_units=512,
-        bidirectional=False
-
-    input(dict(audio, f0)) : a dict object which contains key-values below
-        f0 : fundamental frequency for each frame. torch.tensor w/ shape(B, frame)
-        audio : raw audio w/ shape(B, time)
-
-    output : a dict object which contains key-values below
-
-        loudness : torch.tensor w/ shape(B, frame)
-        f0 : same as input
-        z : (optional) residual information. torch.tensor w/ shape(B, frame, z_units)
-    """
-
-    def __init__(self, config):
+    def __init__(self, conf=default):
         super().__init__()
+        self.conf = conf
 
-        self.config = config
-        self.hop_length = int(config.sample_rate * config.frame_resolution)
+        self.f0_encoder = FeatureEncoder(1)
+        self.loudness_encoder = FeatureEncoder(1)
+        if conf.use_z:
+            self.z = FeatureEncoder(conf.z_units)
 
-        self.loudness_extractor = LoudnessExtractor(
-            sr=config.sample_rate, frame_length=self.hop_length,
-        )
+    def forward(self, x):
+        result = {}
+        f0 = self.f0_encoder(x)
+        f0 = torch.sigmoid(f0) * 2 + 6
+        f0 = torch.pow(2, f0)
+        loudness = self.loudness_encoder(x)
+        loudness = torch.sigmoid(loudness) + 0.1
+        result['f0'] = f0
+        result['loudness'] = loudness
 
-        if config.use_z:
-            self.z_encoder = ZEncoder(
-                sample_rate=config.sample_rate,
-                n_fft=config.n_fft,
-                hop_length=self.hop_length,
-                n_mels=config.n_mels,
-                n_mfcc=config.n_mfcc,
-                gru_units=config.gru_units,
-                z_units=config.z_units,
-                bidirectional=config.bidirectional,
-            )
+        if self.conf.use_z:
+            z = self.z(x)
+            result['z'] = z
 
-    def forward(self, batch):
-        batch["loudness"] = self.loudness_extractor(batch)
-        if self.config.use_z:
-            batch["z"] = self.z_encoder(batch)
-
-        if self.config.sample_rate % self.hop_length != 0:
-            # if sample rate is not divided by hop_length
-            # In short, this is not needed if sr == 16000
-            batch["loudness"] = batch["loudness"][:, : batch["f0"].shape[-1]]
-            batch["z"] = batch["z"][:, : batch["f0"].shape[-1]]
-
-        return batch
-
+        return result

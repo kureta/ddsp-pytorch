@@ -61,7 +61,7 @@ class MSSLoss(nn.Module):
             x_true = x_true["audio"]
 
         # cut reverbation off
-        x_pred = x_pred[..., : x_true.shape[-1]]
+        # x_pred = x_pred[..., : x_true.shape[-1]]
 
         losses = [loss(x_pred, x_true) for loss in self.losses]
         return sum(losses).sum()
