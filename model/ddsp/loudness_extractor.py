@@ -19,7 +19,7 @@ class LoudnessExtractor(nn.Module):
         super(LoudnessExtractor, self).__init__()
 
         self.sr = sr
-        self.n_fft = 2048
+        self.n_fft = 1024
 
         self.device = device
 

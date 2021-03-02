@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import soundfile
 import torch
 from torch import nn
+from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from config.default import Config
@@ -22,6 +23,8 @@ class AutoEncoder(nn.Module):
         self.ddsp = OscillatorBank()
 
     def forward(self, x):
+        # TODO: fix magic numbers
+        x = F.pad(x, (256 + 512, 256 + 512))
         z = self.encoder(x)
         ctrl = self.decoder(z)
         harmonics = self.ddsp(ctrl)
@@ -40,8 +43,9 @@ class Zak(pl.LightningModule):
         return optimizer
 
     def training_step(self, x, batch_idx):
-        x_hat = self.model(x)[..., 256:-256]
+        x_hat = self.model(x)
         loss = self.loss(x_hat, x)
+
         self.log('train_loss', loss)
         return loss
 
@@ -56,7 +60,7 @@ def main():
     dataset = AudioData()
     train_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
     model = Zak()
-    trainer = pl.Trainer(gpus=1, limit_val_batches=0.35)
+    trainer = pl.Trainer(gpus=1, limit_val_batches=0.01)
     trainer.fit(model, train_loader, train_loader)
 
 
