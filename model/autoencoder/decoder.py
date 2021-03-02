@@ -146,14 +146,14 @@ class Decoder(nn.Module):
             latent, h = self.gru(latent)
         latent = self.mlp_gru(latent)
 
-        c = F.softmax(self.dense_harmonic(latent))
-        a = Decoder.modified_sigmoid(self.dense_loudness(latent))
+        c = F.leaky_relu(self.dense_harmonic(latent))
+        a = F.leaky_relu(self.dense_loudness(latent))
 
         # H = self.dense_filter(latent)
         # H = Decoder.modified_sigmoid(H)
 
         # return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
-        return dict(f0=batch["f0"], a=a, c=c, hidden=h, loudness=batch['loudness'])
+        return dict(f0=batch["f0"], c=c, hidden=h, a=a)
 
     @staticmethod
     def modified_sigmoid(a):

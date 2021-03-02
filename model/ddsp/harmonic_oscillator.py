@@ -21,7 +21,7 @@ class OscillatorBank(nn.Module):
     def forward(self, x):
         harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
         phases = self.generate_phases(harmonics)
-        signal = self.generate_signal(harm_amps, x['loudness'], phases)
+        signal = self.generate_signal(harm_amps, x['a'], phases)
 
         return signal
 

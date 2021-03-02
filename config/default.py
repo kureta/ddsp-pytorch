@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    data_dir = '/home/kureta/Bitwig Studio/Projects/shi/exported'
+    data_dir = '/home/kureta/Music/violin'
     example_duration = 2  # in seconds
     example_overlap = 0.5
     sample_rate = 44100
