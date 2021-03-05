@@ -15,6 +15,8 @@ from model.ddsp.harmonic_oscillator import OscillatorBank
 default = Config()
 
 
+# TODO: There is a problem in either the AutoEncoder or the OscillatorBank
+#       Frames have "seams" inbetween
 class AutoEncoder(nn.Module):
     def __init__(self):
         super().__init__()
