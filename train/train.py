@@ -62,7 +62,7 @@ def main():
     dataset = AudioData()
     train_loader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
     model = Zak()
-    trainer = pl.Trainer(gpus=1, limit_val_batches=0.01)
+    trainer = pl.Trainer(gpus=1, limit_val_batches=0.01, precision=16)
     trainer.fit(model, train_loader, train_loader)
 
 
