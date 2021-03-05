@@ -26,10 +26,12 @@ class F0Encoder(nn.Module):
         file = os.path.join(os.path.dirname(crepe.__file__), 'pretrained', f'{conf.crepe_capacity}.pth')
         self.model.load_state_dict(torch.load(file))
 
+        # This section is commented out because we can continue to train CREPE
+        # using analysis by synthesis.
         # Eval mode
-        self.model.eval()
-        for name, val in self.model.named_parameters():
-            val.requires_grad = False
+        # self.model.eval()
+        # for name, val in self.model.named_parameters():
+        #     val.requires_grad = False
 
     def forward(self, batch):
         with torch.no_grad():
