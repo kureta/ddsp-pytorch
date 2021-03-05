@@ -2,6 +2,7 @@ import os
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F  # noqa
 import torchaudio
 
 from config.default import Config
@@ -18,7 +19,7 @@ class F0Encoder(nn.Module):
 
         self.rs = torchaudio.transforms.Resample(conf.sample_rate, 16000)
 
-        self.freq_map = nn.Parameter(torch.linspace(0, 7180, 360) + 1997.3794084376191, requires_grad=False)
+        self.cents_map = nn.Parameter(torch.linspace(0, 7180, 360) + 1997.3794084376191, requires_grad=False)
         # initialize crepe
         self.model = crepe.Crepe(conf.crepe_capacity)
 
@@ -67,14 +68,36 @@ class F0Encoder(nn.Module):
             probabilities = probabilities.reshape((*old_shape, probabilities.shape[-1]))
 
             # calculate predicted frequency, harmonicity and normalized pitch
-            freq, harmonicity, scaled_bins = self.pitch_argmax(probabilities)
+            freq, harmonicity, scaled_bins = self.pitch_weighted(probabilities)
 
             return freq, harmonicity, probabilities, scaled_bins
+
+    def pitch_weighted(self, probabilities):
+        cm = F.pad(self.cents_map, (4, 4))
+        center = probabilities.argmax(dim=-1, keepdims=True)
+        selection = torch.ones((*center.shape[:2], 9), dtype=torch.int64).to(probabilities.device)
+
+        for idx in range(-4, 5):
+            selection[:, :, idx] = center[:, :, 0] + idx + 4
+
+        padded_probs = F.pad(probabilities, (4, 4))
+        mask = torch.zeros_like(padded_probs, dtype=torch.bool)
+        mask.scatter_(2, selection, True)
+
+        values = torch.masked_select(padded_probs, mask).reshape((*probabilities.shape[:2], -1))
+        cm = torch.masked_select(cm, mask).reshape((*probabilities.shape[:2], -1))
+        product_sum = torch.sum(values * cm, dim=-1, keepdim=True)
+        weight_sum = torch.sum(values, dim=-1, keepdim=True)
+
+        cents = product_sum / weight_sum
+        freq = 10 * 2 ** (cents / 1200)
+
+        return freq, center, cents / 360
 
     def pitch_argmax(self, probabilities):
         bins = probabilities.argmax(dim=-1, keepdims=True)
         scaled_bins = bins / 360.
-        cents = self.freq_map[bins]
+        cents = self.cents_map[bins]
         freq = 10 * 2 ** (cents / 1200)
         harmonicity = probabilities.gather(-1, bins)
 
