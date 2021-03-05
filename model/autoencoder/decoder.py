@@ -125,11 +125,11 @@ class Decoder(nn.Module):
         # self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
     def forward(self, batch):
-        f0 = batch["f0"]
-        loudness = batch["loudness"]
+        f0 = batch['scaled_bins']
+        loudness = batch['loudness']
 
         if self.config.use_z:
-            z = batch["z"]
+            z = batch['z']
             latent_z = self.mlp_z(z)
 
         latent_f0 = self.mlp_f0(f0)

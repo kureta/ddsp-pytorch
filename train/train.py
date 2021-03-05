@@ -44,7 +44,7 @@ class Zak(pl.LightningModule):
 
     def training_step(self, x, batch_idx):
         x_hat = self.model(x)
-        loss = self.loss(x_hat, x)
+        loss = self.loss(x_hat[:, 256 + 512:-256 - 512], x[:, 256 + 512:-256 - 512])
 
         self.log('train_loss', loss)
         return loss
@@ -58,7 +58,7 @@ class Zak(pl.LightningModule):
 
 def main():
     dataset = AudioData()
-    train_loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+    train_loader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
     model = Zak()
     trainer = pl.Trainer(gpus=1, limit_val_batches=0.01)
     trainer.fit(model, train_loader, train_loader)
