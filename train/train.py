@@ -15,6 +15,13 @@ from model.ddsp.harmonic_oscillator import OscillatorBank
 default = Config()
 
 
+# TODO: Implement the following:
+#       * LoudnessExtractor (that takes frequencies into account)
+#       * FilteredNoise (that can be used real-time)
+#       * Reverb (also real-time)
+#       * All the real-time synthesis nodes
+#       * Viterbi (also real-time)
+
 # TODO: There is a problem in either the AutoEncoder or the OscillatorBank
 #       Frames have "seams" inbetween
 class AutoEncoder(nn.Module):

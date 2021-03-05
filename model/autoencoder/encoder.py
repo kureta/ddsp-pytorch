@@ -2,8 +2,8 @@ import os
 
 import torch
 import torch.nn as nn
-from torch.nn import functional as F  # noqa
 import torchaudio
+from torch.nn import functional as F  # noqa
 
 from config.default import Config
 from crepe import crepe
@@ -18,8 +18,9 @@ class F0Encoder(nn.Module):
         self.window_size = conf.n_fft
 
         self.rs = torchaudio.transforms.Resample(conf.sample_rate, 16000)
+        self.min_cents = self.cents_map(0)
+        self.max_cents = self.cents_map(359)
 
-        self.cents_map = nn.Parameter(torch.linspace(0, 7180, 360) + 1997.3794084376191, requires_grad=False)
         # initialize crepe
         self.model = crepe.Crepe(conf.crepe_capacity)
 
@@ -30,9 +31,20 @@ class F0Encoder(nn.Module):
         # This section is commented out because we can continue to train CREPE
         # using analysis by synthesis.
         # Eval mode
-        # self.model.eval()
-        # for name, val in self.model.named_parameters():
-        #     val.requires_grad = False
+        self.model.eval()
+        for name, val in self.model.named_parameters():
+            val.requires_grad = False
+
+    @staticmethod
+    def cents_map(bins):
+        return bins * 20 + 1997.3794084376191
+
+    def normalize_cents(self, cents):
+        return (cents - self.min_cents) / (self.max_cents - self.min_cents)
+
+    @staticmethod
+    def freq_map(cents):
+        return 10 * 2 ** (cents / 1200)
 
     def forward(self, batch):
         with torch.no_grad():
@@ -73,7 +85,6 @@ class F0Encoder(nn.Module):
             return freq, harmonicity, probabilities, scaled_bins
 
     def pitch_weighted(self, probabilities):
-        cm = F.pad(self.cents_map, (4, 4))
         center = probabilities.argmax(dim=-1, keepdims=True)
         selection = torch.ones((*center.shape[:2], 9), dtype=torch.int64).to(probabilities.device)
 
@@ -84,24 +95,28 @@ class F0Encoder(nn.Module):
         mask = torch.zeros_like(padded_probs, dtype=torch.bool)
         mask.scatter_(2, selection, True)
 
-        values = torch.masked_select(padded_probs, mask).reshape((*probabilities.shape[:2], -1))
-        cm = torch.masked_select(cm, mask).reshape((*probabilities.shape[:2], -1))
-        product_sum = torch.sum(values * cm, dim=-1, keepdim=True)
+        values = torch.masked_select(padded_probs, mask).reshape((*padded_probs.shape[:2], -1))
+        cents = self.cents_map(selection - 4)
+        product_sum = torch.sum(values * cents, dim=-1, keepdim=True)
         weight_sum = torch.sum(values, dim=-1, keepdim=True)
 
         cents = product_sum / weight_sum
-        freq = 10 * 2 ** (cents / 1200)
+        freq = self.freq_map(cents)
 
-        return freq, center, cents / 360
+        harmonicity = probabilities.gather(-1, center)
+        normalized_cents = self.normalize_cents(cents)
+
+        return freq, harmonicity, normalized_cents
 
     def pitch_argmax(self, probabilities):
         bins = probabilities.argmax(dim=-1, keepdims=True)
-        scaled_bins = bins / 360.
-        cents = self.cents_map[bins]
-        freq = 10 * 2 ** (cents / 1200)
-        harmonicity = probabilities.gather(-1, bins)
+        cents = self.cents_map(bins)
+        freq = self.freq_map(cents)
 
-        return freq, harmonicity, scaled_bins
+        harmonicity = probabilities.gather(-1, bins)
+        normalized_cents = bins / 359.
+
+        return freq, harmonicity, normalized_cents
 
 
 class LoudnessEncoder(nn.Module):
@@ -125,12 +140,12 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         result = {}
-        f0, harmonicity, probabilities, scaled_bins = self.f0_encoder(x)
+        f0, harmonicity, probabilities, normalized_cents = self.f0_encoder(x)
         loudness = self.loudness_encoder(x).unsqueeze(-1)
         result['f0'] = f0
         result['harmonicity'] = harmonicity
         result['loudness'] = loudness
         result['probabilities'] = probabilities
-        result['scaled_bins'] = scaled_bins
+        result['normalized_cents'] = normalized_cents
 
         return result
