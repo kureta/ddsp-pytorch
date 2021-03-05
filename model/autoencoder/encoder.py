@@ -37,9 +37,9 @@ class F0Encoder(nn.Module):
             x = self.rs(batch)
             x -= x.mean(dim=1, keepdims=True)
             x /= x.std(dim=1, keepdims=True)
-            new_len = x.shape[1]
-            hop_length = int(self.hop_length * ((new_len - 1024) / (orig_len - self.window_size)))
-            x = x.unfold(1, 1024, hop_length)
+            resampled_len = x.shape[1]
+            resampled_hop_length = int(self.hop_length * ((resampled_len - 1024) / (orig_len - self.window_size)))
+            x = x.unfold(1, 1024, resampled_hop_length)
             old_shape = x.shape[:2]
             x = x.reshape(-1, 1024)
             probabilities = self.model(x)
