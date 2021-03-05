@@ -63,23 +63,20 @@ class F0Encoder(nn.Module):
             # CREPE output
             probabilities = self.model(x)
 
+            # Restore time dimension
+            probabilities = probabilities.reshape((*old_shape, probabilities.shape[-1]))
+
             # calculate predicted frequency, harmonicity and normalized pitch
             freq, harmonicity, scaled_bins = self.pitch_argmax(probabilities)
-
-            # reshape the batch into (batch, time, x) dimensions
-            freq = freq.reshape((*old_shape, 1))
-            harmonicity = harmonicity.reshape((*old_shape, 1))
-            probabilities = probabilities.reshape((*old_shape, 360))
-            scaled_bins = scaled_bins.reshape((*old_shape, 1))
 
             return freq, harmonicity, probabilities, scaled_bins
 
     def pitch_argmax(self, probabilities):
-        bins = probabilities.argmax(dim=1)
+        bins = probabilities.argmax(dim=-1, keepdims=True)
         scaled_bins = bins / 360.
         cents = self.freq_map[bins]
         freq = 10 * 2 ** (cents / 1200)
-        harmonicity = probabilities.gather(1, bins.unsqueeze(1))
+        harmonicity = probabilities.gather(-1, bins)
 
         return freq, harmonicity, scaled_bins
 
