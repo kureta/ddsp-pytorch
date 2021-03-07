@@ -132,7 +132,7 @@ class Decoder(nn.Module):
         self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
         # self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
-    def forward(self, batch):
+    def forward(self, batch, hidden=None):
         f0 = batch['normalized_cents']
         loudness = batch['loudness']
 
@@ -148,8 +148,8 @@ class Decoder(nn.Module):
         else:
             latent = torch.cat((latent_f0, latent_loudness), dim=-1)
 
-        if 'hidden' in batch:
-            latent, h = self.gru(latent, batch['hidden'])
+        if hidden is not None:
+            latent, h = self.gru(latent, hidden)
         else:
             latent, h = self.gru(latent)
         latent = self.mlp_gru(latent)
@@ -161,6 +161,8 @@ class Decoder(nn.Module):
         # H = Decoder.modified_sigmoid(H)
 
         # return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
+        if hidden is not None:
+            return dict(f0=batch["f0"], c=c, hidden=h, a=a), hidden
         return dict(f0=batch["f0"], c=c, hidden=h, a=a)
 
     @staticmethod

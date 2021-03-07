@@ -42,9 +42,11 @@ class Zak(BaseNode):
         # Easier way to achive this is to just get last 2 frames and
         # drop first and last 256 samples
         self.audio_in_t = np.zeros(4096, dtype='float32')
+        self.hidden = torch.randn(1, 1, 512)
 
     def setup(self):
         self.autoencoder = self.autoencoder.cuda()
+        self.hidden = self.hidden.cuda()
 
         self.audio_out = np.frombuffer(self.audio_out, dtype='float32')
         self.audio_in = np.frombuffer(self.audio_in, dtype='float32')
@@ -55,4 +57,4 @@ class Zak(BaseNode):
             return
         self.flag.value = True
         with torch.no_grad():
-            self.audio_out[...] = self.autoencoder.forward_live(self.audio_in)
+            self.audio_out[...], self.hidden = self.autoencoder.forward_live(self.audio_in, self.hidden)

@@ -32,11 +32,11 @@ class AutoEncoder(nn.Module):
 
         return harmonics
 
-    def forward_live(self, x):
+    def forward_live(self, x, hidden):
         audio_in = torch.from_numpy(x).unsqueeze(0).cuda()
         # We are dropping those samples here
         z = self.encoder(audio_in[:, 256:-256])
-        ctrl = self.decoder(z)
+        ctrl, hidden = self.decoder(z, hidden)
         audio_hat = self.ddsp.live(ctrl)
 
-        return audio_hat.cpu().squeeze(0).numpy()
+        return audio_hat.cpu().squeeze(0).numpy(), hidden
