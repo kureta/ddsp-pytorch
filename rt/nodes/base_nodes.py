@@ -1,4 +1,5 @@
 import multiprocessing as mp
+from time import time
 
 
 class BaseNode(mp.Process):
@@ -9,11 +10,18 @@ class BaseNode(mp.Process):
 
     def run(self):
         self.setup()
+        times = []
         while not self.exit.is_set():
+            start = time()
             if self.pause.is_set():
                 self.pause.wait()
             self.task()
+            times.append(time() - start)
         self.teardown()
+        mean = sum(times) / len(times)
+        minim, maxim = min(times), max(times)
+        print(f'{self.__class__.__name__} processing times:\n'
+              f'mean: {mean}, max: {maxim}, min: {minim}')
 
     def setup(self):
         pass

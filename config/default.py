@@ -11,7 +11,7 @@ class Config:
     hop_length = 512
     n_mels = 128
     n_mfcc = 42
-    crepe_capacity = 'full'
+    crepe_capacity = 'tiny'
     f_min = 20.
     f_max = 8000.
     n_harmonics = 100
@@ -22,3 +22,4 @@ class Config:
     decoder_mlp_units = 512
     decoder_mlp_layers = 3
     decoder_gru_units = 512
+    batch_size = 32

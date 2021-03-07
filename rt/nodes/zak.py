@@ -32,7 +32,7 @@ class Zak(BaseNode):
         super().__init__()
         self.flag = flag
         self.autoencoder = AutoEncoder()
-        self.autoencoder.load_state_dict(load_checkpoint(4))
+        self.autoencoder.load_state_dict(load_checkpoint(9))
         self.autoencoder.eval()
 
         self.audio_in = audio_in
@@ -41,8 +41,8 @@ class Zak(BaseNode):
         # concat with the current frame - last 256 samples
         # Easier way to achive this is to just get last 2 frames and
         # drop first and last 256 samples
-        self.audio_in_t = np.zeros(4096, dtype='float32')
         self.hidden = torch.randn(1, 1, 512)
+        self.times = None
 
     def setup(self):
         self.autoencoder = self.autoencoder.cuda()
@@ -50,10 +50,12 @@ class Zak(BaseNode):
 
         self.audio_out = np.frombuffer(self.audio_out, dtype='float32')
         self.audio_in = np.frombuffer(self.audio_in, dtype='float32')
-        self.audio_in_t = torch.from_numpy(self.audio_in_t).cuda()
+        with torch.no_grad():
+            self.audio_out[...], self.hidden = self.autoencoder.forward_live(self.audio_in, self.hidden)
 
     def task(self):
         if not self.flag.value:
+            print('waiting new frame')
             return
         self.flag.value = True
         with torch.no_grad():

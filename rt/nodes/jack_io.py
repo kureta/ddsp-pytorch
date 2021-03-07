@@ -1,4 +1,5 @@
 import threading
+from time import time
 
 import jack
 import numpy as np
@@ -26,8 +27,10 @@ class JackIO(threading.Thread):
         self.output_buffer = np.frombuffer(output_buffer, dtype='float32')
         self.input_buffer = np.frombuffer(input_buffer, dtype='float32')
         self.flag = flag
+        self.times = []
 
     def process(self, _frames):
+        start = time()
         self.flag.value = True
         for i in self.client.inports:
             # swap buffers
@@ -37,8 +40,14 @@ class JackIO(threading.Thread):
             self.input_buffer[-2048:] = buff[-2048:]
         for o in self.client.outports:
             o.get_buffer()[:] = self.output_buffer
+        self.times.append(time() - start)
 
     def join(self, **kwargs):
+        mean = sum(self.times) / len(self.times)
+        minim, maxim = min(self.times), max(self.times)
+        print(f'{self.__class__.__name__} processing times:\n'
+              f'mean: {mean}, max: {maxim}, min: {minim}')
+
         print('JACK shutdown!')
         self.event.set()
         super().join(**kwargs)
