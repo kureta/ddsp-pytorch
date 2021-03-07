@@ -28,7 +28,7 @@ class MLP(nn.Module):
     output(x): torch.tensor w/ (B, ..., n_units)
     """
 
-    def __init__(self, n_input, n_units, n_layer, relu=nn.ReLU, inplace=False):
+    def __init__(self, n_input, n_units, n_layer, relu=nn.LeakyReLU, inplace=False):
         super().__init__()
         self.n_layer = n_layer
         self.n_input = n_input
@@ -116,7 +116,7 @@ class Decoder(nn.Module):
         self.gru = nn.GRU(
             input_size=self.num_mlp * config.decoder_mlp_units,
             hidden_size=config.decoder_gru_units,
-            num_layers=1,
+            num_layers=config.decoder_gru_layers,
             batch_first=True,
         )
 
@@ -130,7 +130,7 @@ class Decoder(nn.Module):
         # one element for overall loudness
         self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics)
         self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
-        # self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
+        self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
     def forward(self, batch, hidden=None):
         f0 = batch['normalized_cents']
@@ -154,16 +154,15 @@ class Decoder(nn.Module):
             latent, h = self.gru(latent)
         latent = self.mlp_gru(latent)
 
-        c = F.leaky_relu(self.dense_harmonic(latent))
-        a = F.leaky_relu(self.dense_loudness(latent))
+        c = self.modified_sigmoid(self.dense_harmonic(latent))
+        a = self.modified_sigmoid(self.dense_loudness(latent))
 
-        # H = self.dense_filter(latent)
-        # H = Decoder.modified_sigmoid(H)
+        H = self.dense_filter(latent)
+        H = self.modified_sigmoid(H)
 
-        # return dict(f0=batch["f0"], a=a, c=c, H=H, hidden=h)
         if hidden is not None:
-            return dict(f0=batch["f0"], c=c, hidden=h, a=a), hidden
-        return dict(f0=batch["f0"], c=c, hidden=h, a=a)
+            return dict(f0=batch["f0"], c=c, hidden=h, H=H, a=a), hidden
+        return dict(f0=batch["f0"], c=c, hidden=h, H=H, a=a)
 
     @staticmethod
     def modified_sigmoid(a):
@@ -172,3 +171,5 @@ class Decoder(nn.Module):
         a = a.mul(2.0)
         a.add_(1e-7)
         return a
+
+

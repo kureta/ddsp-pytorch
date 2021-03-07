@@ -14,12 +14,13 @@ class Config:
     crepe_capacity = 'tiny'
     f_min = 20.
     f_max = 8000.
-    n_harmonics = 100
+    n_harmonics = 60
     n_noise_filters = 65
     use_z = False
     encoder_gru_units = 512
     z_units = 16
-    decoder_mlp_units = 512
-    decoder_mlp_layers = 3
+    decoder_mlp_units = 256
+    decoder_mlp_layers = 2
     decoder_gru_units = 512
+    decoder_gru_layers = 3
     batch_size = 32

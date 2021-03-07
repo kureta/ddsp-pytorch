@@ -1,10 +1,13 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from config.default import Config
 
 default = Config()
+
+
 
 
 class OscillatorBank(nn.Module):
@@ -43,7 +46,7 @@ class OscillatorBank(nn.Module):
         harm_amps = harm_amps.masked_fill(mask, 0.)
         harmonics *= 2 * np.pi  # radians per second
         harmonics /= self.sample_rate  # radians per sample
-        harmonics = harmonics.repeat_interleave(self.hop_size, 1)
+        harmonics = self.rescale(harmonics)
         return harmonics, harm_amps
 
     @staticmethod
@@ -53,11 +56,16 @@ class OscillatorBank(nn.Module):
         return phases
 
     def generate_signal(self, harm_amps, loudness, phases):
-        loudness = loudness.repeat_interleave(self.hop_size, 1)
-        harm_amps = harm_amps.repeat_interleave(self.hop_size, 1)
+        loudness = self.rescale(loudness)
+        harm_amps = self.rescale(harm_amps)
         signal = loudness * harm_amps * torch.sin(phases)
         signal = torch.sum(signal, dim=2) / self.n_harmonics
         return signal
+
+    def rescale(self, x):
+        return F.interpolate(x.permute(0, 2, 1),
+                             scale_factor=self.hop_size,
+                             mode='linear').permute(0, 2, 1)
 
     # TODO: similarly to decoder, we can move this into forward
     #       by keeping track of phases outside the class, like hidden for GRU

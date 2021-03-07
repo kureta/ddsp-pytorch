@@ -4,24 +4,25 @@ from torch.nn import functional as F
 
 from model.autoencoder.decoder import Decoder
 from model.autoencoder.encoder import Encoder
+from model.ddsp.filtered_noise import FilteredNoise
 from model.ddsp.harmonic_oscillator import OscillatorBank
 
 
 # TODO: Implement the following:
 #       * LoudnessExtractor (that takes frequencies into account)
-#       * FilteredNoise (that can be used real-time)
 #       * Reverb (also real-time)
-#       * All the real-time synthesis nodes
-#       * Viterbi (also real-time)
 
 # TODO: There is a problem in either the AutoEncoder or the OscillatorBank
 #       Frames have "seams" inbetween
+
+
 class AutoEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.ddsp = OscillatorBank()
+        self.noise = FilteredNoise()
 
     def forward(self, x):
         # TODO: fix magic numbers
@@ -29,8 +30,11 @@ class AutoEncoder(nn.Module):
         z = self.encoder(x)
         ctrl = self.decoder(z)
         harmonics = self.ddsp(ctrl)
+        noise = self.noise(ctrl)
 
-        return harmonics
+        signal = harmonics + noise
+
+        return signal
 
     # TODO: similarly to the decoder, we can ad an if statement to forward
     #       and drop this forward live
@@ -39,6 +43,9 @@ class AutoEncoder(nn.Module):
         # We are dropping those samples here
         z = self.encoder(audio_in[:, 256:-256])
         ctrl, hidden = self.decoder(z, hidden)
-        audio_hat = self.ddsp.live(ctrl)
+        harmonics = self.ddsp.live(ctrl)
+        noise = self.noise(ctrl)
+
+        audio_hat = harmonics + noise
 
         return audio_hat.cpu().squeeze(0).numpy(), hidden

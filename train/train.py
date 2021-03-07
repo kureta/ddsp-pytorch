@@ -15,7 +15,7 @@ class Zak(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = AutoEncoder()
-        self.loss = MSSLoss([2048, 1024, 512])
+        self.loss = MSSLoss([2048, 1024, 512, 256, 128, 64])
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

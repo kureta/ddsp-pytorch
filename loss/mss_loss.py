@@ -3,8 +3,8 @@ Implementation of Multi-Scale Spectral Loss as described in DDSP,
 which is originally suggested in NSF (Wang et al., 2019)
 """
 
+import torch
 import torch.nn as nn
-import torchaudio
 import torch.nn.functional as F  # noqa
 
 
@@ -19,7 +19,16 @@ class SSSLoss(nn.Module):
         self.alpha = alpha
         self.eps = eps
         self.hop_length = int(n_fft * (1 - overlap))  # 25% of the length
-        self.spec = torchaudio.transforms.Spectrogram(n_fft=self.n_fft, hop_length=self.hop_length)
+
+    def spec(self, signal):
+        return torch.stft(
+            signal,
+            self.n_fft,
+            self.hop_length,
+            center=True,
+            normalized=True,
+            return_complex=True,
+        ).abs()
 
     def forward(self, x_pred, x_true):
         s_true = self.spec(x_true)
