@@ -60,20 +60,16 @@ class OscillatorBank(nn.Module):
         return signal
 
     # TODO: fixing training broke live
-    def live(self,
-             f0: torch.Tensor,
-             loudness: torch.Tensor,
-             harm_amps: torch.Tensor,
-             harm_stretch: torch.Tensor):
-        f0 = f0.unsqueeze(0).unsqueeze(0)
-        loudness = loudness.unsqueeze(0).unsqueeze(0)
-        harm_amps = harm_amps.unsqueeze(0).unsqueeze(0)
-        harm_stretch = harm_stretch.unsqueeze(0).unsqueeze(0)
+    def live(self, x):
+        f0 = x['f0']
+        harm_amps = x['c']
+        harm_stretch = 0
+        loudness = x['a']
 
-        harmonics = self.prepare_harmonics(f0, harm_amps, harm_stretch)
+        harmonics, harm_amps = self.prepare_harmonics(f0, harm_amps, harm_stretch)
         harmonics[0, 0, :] += self.last_phases  # phase offset from last sample
         phases = self.generate_phases(harmonics)
         self.last_phases.data = phases[0, -1, :]  # update phase offset
         signal = self.generate_signal(harm_amps, loudness, phases)
 
-        return signal.squeeze(0).squeeze(0)
+        return signal
