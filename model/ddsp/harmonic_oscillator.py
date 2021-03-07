@@ -59,7 +59,8 @@ class OscillatorBank(nn.Module):
         signal = torch.sum(signal, dim=2) / self.n_harmonics
         return signal
 
-    # TODO: fixing training broke live
+    # TODO: similarly to decoder, we can move this into forward
+    #       by keeping track of phases outside the class, like hidden for GRU
     def live(self, x):
         f0 = x['f0']
         harm_amps = x['c']

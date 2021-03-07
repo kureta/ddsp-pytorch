@@ -32,6 +32,8 @@ class AutoEncoder(nn.Module):
 
         return harmonics
 
+    # TODO: similarly to the decoder, we can ad an if statement to forward
+    #       and drop this forward live
     def forward_live(self, x, hidden):
         audio_in = torch.from_numpy(x).unsqueeze(0).cuda()
         # We are dropping those samples here
