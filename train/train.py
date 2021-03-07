@@ -1,44 +1,14 @@
 import pytorch_lightning as pl
 import soundfile
 import torch
-from torch import nn
-from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from config.default import Config
 from dataset.audio_dataset import AudioData
 from loss.mss_loss import MSSLoss
-from model.autoencoder.decoder import Decoder
-from model.autoencoder.encoder import Encoder
-from model.ddsp.harmonic_oscillator import OscillatorBank
+from model.autoencoder.autoencoder import AutoEncoder
 
 default = Config()
-
-
-# TODO: Implement the following:
-#       * LoudnessExtractor (that takes frequencies into account)
-#       * FilteredNoise (that can be used real-time)
-#       * Reverb (also real-time)
-#       * All the real-time synthesis nodes
-#       * Viterbi (also real-time)
-
-# TODO: There is a problem in either the AutoEncoder or the OscillatorBank
-#       Frames have "seams" inbetween
-class AutoEncoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-        self.ddsp = OscillatorBank()
-
-    def forward(self, x):
-        # TODO: fix magic numbers
-        x = F.pad(x, (256 + 512, 256 + 512))
-        z = self.encoder(x)
-        ctrl = self.decoder(z)
-        harmonics = self.ddsp(ctrl)
-
-        return harmonics
 
 
 class Zak(pl.LightningModule):

@@ -1,20 +1,38 @@
-import torch
+from pathlib import Path
+
 import numpy as np
+import torch
 
 from rt.nodes.base_nodes import BaseNode
-from model.autoencoder.encoder import Encoder
-from model.autoencoder.decoder import Decoder
-from model.ddsp.harmonic_oscillator import OscillatorBank
+from train.train import AutoEncoder
 
 
-class AutoEncoder(BaseNode):
+def load_checkpoint(version):
+    file = Path(
+        Path.cwd(),
+        'lightning_logs',
+        f'version_{version}',
+        'checkpoints',
+    ).glob('*.ckpt')
+    file = sorted(list(file), key=lambda x: int(x.name.split('-')[0].split('=')[1]))
+    file = file[-1]
+
+    state_dict = torch.load(file)['state_dict']
+    new_state = {}
+    for key in state_dict.keys():
+        if key.startswith('model'):
+            new_key = key[6:]
+            new_state[new_key] = state_dict[key]
+
+    return new_state
+
+
+class Zak(BaseNode):
     def __init__(self, audio_in, audio_out):
         super().__init__()
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-        self.ddsp = OscillatorBank()
-        for module in [self.encoder, self.decoder, self.ddsp]:
-            module.eval()
+        self.autoencoder = AutoEncoder()
+        self.autoencoder.load_state_dict(load_checkpoint(4))
+        self.autoencoder.eval()
 
         self.audio_in = audio_in
         self.audio_out = audio_out
@@ -25,9 +43,7 @@ class AutoEncoder(BaseNode):
         self.audio_in_t = np.zeros(4096, dtype='float32')
 
     def setup(self):
-        self.encoder = self.encoder.cuda()
-        self.decoder = self.decoder.cuda()
-        self.ddsp = self.ddsp.cuda()
+        self.autoencoder = self.autoencoder.cuda()
 
         self.audio_out = np.frombuffer(self.audio_out, dtype='float32')
         self.audio_in = np.frombuffer(self.audio_in, dtype='float32')
@@ -35,10 +51,4 @@ class AutoEncoder(BaseNode):
 
     def task(self):
         with torch.no_grad():
-            audio_in = torch.from_numpy(self.audio_in).unsqueeze(0).cuda()
-            # We are dropping those samples here
-            z = self.encoder(audio_in[:, 256:-256])
-            ctrl = self.decoder(z)
-            audio_hat = self.ddsp.live(ctrl)
-
-            self.audio_out[...] = audio_hat.cpu().squeeze(0).numpy()
+            self.audio_out[...] = self.autoencoder.forward_live(self.audio_in)

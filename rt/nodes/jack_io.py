@@ -51,6 +51,13 @@ class JackIO(threading.Thread):
         for dest in playback:
             self.client.connect(self.client.outports[0], dest)
 
+        recording = self.client.get_ports(is_audio=True, is_output=True, is_physical=True)
+        if not recording:
+            raise RuntimeError('No physical input ports')
+
+        for dest in recording:
+            self.client.connect(dest, self.client.inports[0])
+
     def task(self):
         print('JACK is processing...')
         try:
