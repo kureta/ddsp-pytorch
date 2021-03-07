@@ -15,8 +15,14 @@ class OscillatorBank(nn.Module):
         self.sample_rate = conf.sample_rate
         self.hop_size = conf.hop_length
 
-        self.harmonics = nn.Parameter(torch.arange(1, self.n_harmonics + 1, step=1), requires_grad=False)
-        self.last_phases = nn.Parameter(torch.zeros_like(self.harmonics), requires_grad=False)
+        self.harmonics = nn.Parameter(
+            torch.arange(1, self.n_harmonics + 1, step=1),
+            requires_grad=False
+        )
+        self.last_phases = nn.Parameter(
+            torch.zeros_like(self.harmonics),
+            requires_grad=False
+        )
 
     def forward(self, x):
         harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
@@ -28,7 +34,10 @@ class OscillatorBank(nn.Module):
     def prepare_harmonics(self, f0, harm_amps, harm_stretch):
         harmonics = self.harmonics ** (1. + harm_stretch)
         # Hz (cycles per second)
-        harmonics = harmonics.unsqueeze(0).unsqueeze(0).repeat(f0.shape[0], f0.shape[1], 1) * f0
+        harmonics = harmonics.unsqueeze(0).unsqueeze(0).repeat(
+            f0.shape[0],
+            f0.shape[1],
+            1) * f0
         # zero out above nyquist
         mask = harmonics > self.sample_rate // 2
         harm_amps = harm_amps.masked_fill(mask, 0.)

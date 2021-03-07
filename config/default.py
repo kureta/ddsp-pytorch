@@ -11,7 +11,7 @@ class Config:
     hop_length = 512
     n_mels = 128
     n_mfcc = 42
-    crepe_capacity = 'tiny'
+    crepe_capacity = 'full'
     f_min = 20.
     f_max = 8000.
     n_harmonics = 100

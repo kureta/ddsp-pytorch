@@ -1,7 +1,3 @@
-"""
-Implementation of decoder network architecture of DDSP.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,7 +10,7 @@ default = Config()
 
 class MLP(nn.Module):
     """
-    MLP (Multi-layer Perception). 
+    MLP (Multi-layer Perception).
 
     One layer consists of what as below:
         - 1 Dense Layer
@@ -25,7 +21,8 @@ class MLP(nn.Module):
         n_input : dimension of input
         n_units : dimension of hidden unit
         n_layer : depth of MLP (the number of layers)
-        relu : relu (default : nn.ReLU, can be changed to nn.LeakyReLU, nn.PReLU for example.)
+        relu : relu (default : nn.ReLU, can be changed to
+               nn.LeakyReLU, nn.PReLU for example.)
 
     input(x): torch.tensor w/ shape(B, ... , n_input)
     output(x): torch.tensor w/ (B, ..., n_units)
@@ -39,7 +36,7 @@ class MLP(nn.Module):
         self.inplace = inplace
 
         self.add_module(
-            f"mlp_layer1",
+            "mlp_layer1",
             nn.Sequential(
                 nn.Linear(n_input, n_units),
                 nn.LayerNorm(normalized_shape=n_units),
@@ -67,7 +64,7 @@ class Decoder(nn.Module):
     """
     Decoder.
 
-    Constructor arguments: 
+    Constructor arguments:
         use_z : (Bool), if True, Decoder will use z as input.
         mlp_units: 512
         mlp_layers: 3
@@ -87,7 +84,8 @@ class Decoder(nn.Module):
         f0 : same as input
         c : torch.tensor w/ shape(B, time, n_harmonics) which satisfies sum(c) == 1
         a : torch.tensor w/ shape(B, time) which satisfies a > 0
-        H : noise filter in frequency domain. torch.tensor w/ shape(B, frame_num, filter_coeff_length)
+        H : noise filter in frequency domain. torch.tensor
+            w/ shape(B, frame_num, filter_coeff_length)
     """
 
     def __init__(self, config=default):
@@ -95,11 +93,21 @@ class Decoder(nn.Module):
 
         self.config = config
 
-        self.mlp_f0 = MLP(n_input=1, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers)
-        self.mlp_loudness = MLP(n_input=1, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers)
+        self.mlp_f0 = MLP(
+            n_input=1,
+            n_units=config.decoder_mlp_units,
+            n_layer=config.decoder_mlp_layers
+        )
+        self.mlp_loudness = MLP(
+            n_input=1,
+            n_units=config.decoder_mlp_units,
+            n_layer=config.decoder_mlp_layers
+        )
         if config.use_z:
             self.mlp_z = MLP(
-                n_input=config.z_units, n_units=config.decoder_mlp_units, n_layer=config.decoder_mlp_layers
+                n_input=config.z_units,
+                n_units=config.decoder_mlp_units,
+                n_layer=config.decoder_mlp_layers
             )
             self.num_mlp = 3
         else:

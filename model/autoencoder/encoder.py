@@ -7,8 +7,50 @@ from torch.nn import functional as F  # noqa
 
 from config.default import Config
 from crepe import crepe
+from model.autoencoder.decoder import MLP
 
 default = Config()
+
+
+class HiddenMarkovModel:
+    def __init__(self):
+        super().__init__()
+        # Fixed priors for pitch tracking with CREPE
+        # uniform prior on the starting pitch
+        self.starting = torch.ones(360) / 360
+
+        # transition probabilities inducing continuous pitch
+        xx, yy = torch.meshgrid(torch.arange(360), torch.arange(360))
+        transition = torch.maximum(12 - abs(xx - yy), torch.zeros_like(xx))
+        self.transition = transition / torch.sum(transition, dim=1, keepdim=True)
+
+        # emission probability = fixed probability for self, evenly distribute the
+        # others
+        self_emission = 0.1
+        self.emission = (torch.eye(360) * self_emission + torch.ones((360, 360)) *
+                         ((1 - self_emission) / 360))
+
+
+class PitchTracker(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.input_mlp = MLP(360, 512, 1)
+        self.gru = nn.GRU(
+            input_size=512,
+            hidden_size=512,
+            num_layers=2,
+            batch_first=True,
+        )
+        self.output = nn.Linear(512, 1)
+
+    def forward(self, x):
+        z = self.input_mlp(x)
+        z, _ = self.gru(z)
+        z = F.relu(z)
+        z = self.output(z)
+        z = torch.tanh(z)
+
+        return z
 
 
 class F0Encoder(nn.Module):
@@ -25,7 +67,9 @@ class F0Encoder(nn.Module):
         self.model = crepe.Crepe(conf.crepe_capacity)
 
         # Load weights
-        file = os.path.join(os.path.dirname(crepe.__file__), 'pretrained', f'{conf.crepe_capacity}.pth')
+        file = os.path.join(os.path.dirname(crepe.__file__),
+                            'pretrained',
+                            f'{conf.crepe_capacity}.pth')
         self.model.load_state_dict(torch.load(file))
 
         # This section is commented out because we can continue to train CREPE
@@ -55,16 +99,19 @@ class F0Encoder(nn.Module):
             x = self.rs(batch)
 
             # normalize for CREPE
-            x -= x.mean(dim=1, keepdims=True)
-            x /= x.std(dim=1, keepdims=True)
+            x -= x.mean(dim=1, keepdim=True)
+            x /= x.std(dim=1, keepdim=True)
 
             # resampled audio duration
             resampled_len = x.shape[1]
 
             # calculate required hop length at the new sample rate
-            resampled_hop_length = int(self.hop_length * ((resampled_len - 1024) / (orig_len - self.window_size)))
+            resampled_hop_length = int(
+                self.hop_length * ((resampled_len - 1024) / (orig_len - self.window_size))
+            )
 
-            # get overlapping windows using the new hop length with a window size of 1024, as expected by CREPE
+            # get overlapping windows using the new hop length with a window size of 1024
+            # as expected by CREPE
             x = x.unfold(1, 1024, resampled_hop_length)
 
             # save the original batch and time dimensions
@@ -80,13 +127,25 @@ class F0Encoder(nn.Module):
             probabilities = probabilities.reshape((*old_shape, probabilities.shape[-1]))
 
             # calculate predicted frequency, harmonicity and normalized pitch
-            freq, harmonicity, scaled_bins = self.pitch_weighted(probabilities)
+            freq, harmonicity, normalized_cents = self.pitch_argmax(probabilities)
 
-            return freq, harmonicity, probabilities, scaled_bins
+            return freq, harmonicity, probabilities, normalized_cents
+
+    def pitch_viterbi(self, probability):
+        center = probability.argmax(dim=-1)
+        viterbi_path = torch.zeros_like(center)
+        for idx in range(viterbi_path.shape[0]):
+            viterbi_path[idx], _ = self.markov.viterbi_inference(center[idx])
+
+        return self.pitch_centered(viterbi_path.unsqueeze(-1), probability)
 
     def pitch_weighted(self, probabilities):
-        center = probabilities.argmax(dim=-1, keepdims=True)
-        selection = torch.ones((*center.shape[:2], 9), dtype=torch.int64).to(probabilities.device)
+        center = probabilities.argmax(dim=-1, keepdim=True)
+        return self.pitch_centered(center, probabilities)
+
+    def pitch_centered(self, center, probabilities):
+        selection = torch.ones(
+            (*center.shape[:2], 9), dtype=torch.int64).to(probabilities.device)
 
         for idx in range(-4, 5):
             selection[:, :, idx] = center[:, :, 0] + idx + 4
@@ -95,7 +154,8 @@ class F0Encoder(nn.Module):
         mask = torch.zeros_like(padded_probs, dtype=torch.bool)
         mask.scatter_(2, selection, True)
 
-        values = torch.masked_select(padded_probs, mask).reshape((*padded_probs.shape[:2], -1))
+        values = torch.masked_select(padded_probs, mask).reshape(
+            (*padded_probs.shape[:2], -1))
         cents = self.cents_map(selection - 4)
         product_sum = torch.sum(values * cents, dim=-1, keepdim=True)
         weight_sum = torch.sum(values, dim=-1, keepdim=True)
@@ -109,7 +169,7 @@ class F0Encoder(nn.Module):
         return freq, harmonicity, normalized_cents
 
     def pitch_argmax(self, probabilities):
-        bins = probabilities.argmax(dim=-1, keepdims=True)
+        bins = probabilities.argmax(dim=-1, keepdim=True)
         cents = self.cents_map(bins)
         freq = self.freq_map(cents)
 
