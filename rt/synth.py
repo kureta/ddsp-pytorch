@@ -3,7 +3,7 @@ import signal
 from multiprocessing import Event, set_start_method
 from multiprocessing.sharedctypes import RawArray, RawValue  # noqa
 
-from rt.nodes.autoencoder import Zak
+from rt.nodes.zak import Zak
 from rt.nodes.jack_io import JackIO
 
 
@@ -17,7 +17,7 @@ class App:
         flag.value = False
 
         self.jack = JackIO(input_buffer, output_buffer, flag)
-        self.zak = Zak(input_buffer, output_buffer)
+        self.zak = Zak(input_buffer, output_buffer, flag)
 
         self.exit = Event()
 

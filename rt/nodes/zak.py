@@ -28,8 +28,9 @@ def load_checkpoint(version):
 
 
 class Zak(BaseNode):
-    def __init__(self, audio_in, audio_out):
+    def __init__(self, audio_in, audio_out, flag):
         super().__init__()
+        self.flag = flag
         self.autoencoder = AutoEncoder()
         self.autoencoder.load_state_dict(load_checkpoint(4))
         self.autoencoder.eval()
@@ -50,5 +51,8 @@ class Zak(BaseNode):
         self.audio_in_t = torch.from_numpy(self.audio_in_t).cuda()
 
     def task(self):
+        if not self.flag.value:
+            return
+        self.flag.value = True
         with torch.no_grad():
             self.audio_out[...] = self.autoencoder.forward_live(self.audio_in)
