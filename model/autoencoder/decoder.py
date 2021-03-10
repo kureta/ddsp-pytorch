@@ -7,25 +7,6 @@ default = Config()
 
 
 class MLP(nn.Module):
-    """
-    MLP (Multi-layer Perception).
-
-    One layer consists of what as below:
-        - 1 Dense Layer
-        - 1 Layer Norm
-        - 1 ReLU
-
-    constructor arguments :
-        n_input : dimension of input
-        n_units : dimension of hidden unit
-        n_layer : depth of MLP (the number of layers)
-        relu : relu (default : nn.ReLU, can be changed to
-               nn.LeakyReLU, nn.PReLU for example.)
-
-    input(x): torch.tensor w/ shape(B, ... , n_input)
-    output(x): torch.tensor w/ (B, ..., n_units)
-    """
-
     def __init__(self, n_input, n_units, n_layer, relu=nn.LeakyReLU, inplace=False):
         super().__init__()
         self.n_layer = n_layer
@@ -59,33 +40,6 @@ class MLP(nn.Module):
 
 
 class Decoder(nn.Module):
-    """
-    Decoder.
-
-    Constructor arguments:
-        use_z : (Bool), if True, Decoder will use z as input.
-        mlp_units: 512
-        mlp_layers: 3
-        z_units: 16
-        n_harmonics: 101
-        n_freq: 65
-        gru_units: 512
-
-    input(dict(f0, z(optional), l)) : a dict object which contains key-values below
-        f0 : fundamental frequency for each frame. torch.tensor w/ shape(B, time)
-        z : (optional) residual information. torch.tensor w/ shape(B, time, z_units)
-        loudness : torch.tensor w/ shape(B, time)
-
-        *note dimension of z is not specified in the paper.
-
-    output : a dict object which contains key-values below
-        f0 : same as input
-        c : torch.tensor w/ shape(B, time, n_harmonics) which satisfies sum(c) == 1
-        a : torch.tensor w/ shape(B, time) which satisfies a > 0
-        H : noise filter in frequency domain. torch.tensor
-            w/ shape(B, frame_num, filter_coeff_length)
-    """
-
     def __init__(self, config=default):
         super().__init__()
 
@@ -101,15 +55,21 @@ class Decoder(nn.Module):
             n_units=config.decoder_mlp_units,
             n_layer=config.decoder_mlp_layers
         )
+        self.mlp_harmonicity = MLP(
+            n_input=1,
+            n_units=config.decoder_mlp_units,
+            n_layer=config.decoder_mlp_layers
+        )
+
         if config.use_z:
             self.mlp_z = MLP(
                 n_input=config.z_units,
                 n_units=config.decoder_mlp_units,
                 n_layer=config.decoder_mlp_layers
             )
-            self.num_mlp = 3
+            self.num_mlp = 4
         else:
-            self.num_mlp = 2
+            self.num_mlp = 3
 
         self.gru = nn.GRU(
             input_size=self.num_mlp * config.decoder_mlp_units,
@@ -140,11 +100,12 @@ class Decoder(nn.Module):
 
         latent_f0 = self.mlp_f0(f0)
         latent_loudness = self.mlp_loudness(loudness)
+        latent_harmonicity = self.mlp_harmonicity(batch['harmonicity'])
 
         if self.config.use_z:
-            latent = torch.cat((latent_f0, latent_z, latent_loudness), dim=-1)
+            latent = torch.cat((latent_f0, latent_z, latent_loudness, latent_harmonicity), dim=-1)
         else:
-            latent = torch.cat((latent_f0, latent_loudness), dim=-1)
+            latent = torch.cat((latent_f0, latent_loudness, latent_harmonicity), dim=-1)
 
         if hidden is not None:
             latent, h = self.gru(latent, hidden)
