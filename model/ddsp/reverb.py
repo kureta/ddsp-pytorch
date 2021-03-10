@@ -8,6 +8,7 @@ from model.ddsp.filtered_noise import fft_convolve
 default = Config()
 
 
+# TODO: In live mode, reverb reverberares the reverberated buffer
 class Reverb(nn.Module):
     def __init__(self, conf=default, initial_wet=0, initial_decay=5):
         super().__init__()
