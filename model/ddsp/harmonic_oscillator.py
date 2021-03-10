@@ -1,13 +1,11 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa
 
 from config.default import Config
 
 default = Config()
-
-
 
 
 class OscillatorBank(nn.Module):

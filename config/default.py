@@ -11,7 +11,7 @@ class Config:
     hop_length = 512
     n_mels = 128
     n_mfcc = 42
-    crepe_capacity = 'tiny'
+    crepe_capacity = 'full'
     f_min = 20.
     f_max = 8000.
     n_harmonics = 60
@@ -19,8 +19,8 @@ class Config:
     use_z = False
     encoder_gru_units = 512
     z_units = 16
-    decoder_mlp_units = 256
-    decoder_mlp_layers = 2
+    decoder_mlp_units = 512
+    decoder_mlp_layers = 3
     decoder_gru_units = 512
-    decoder_gru_layers = 3
+    decoder_gru_layers = 1
     batch_size = 16

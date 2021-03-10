@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
+from torch.nn import functional as F  # noqa
 
 from model.autoencoder.decoder import Decoder
 from model.autoencoder.encoder import Encoder

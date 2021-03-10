@@ -1,7 +1,7 @@
 import functools
 
 import torch
-from torch.nn import functional as F
+from torch.nn import functional as F  # noqa
 
 PITCH_BINS = 360
 CENTS_PER_BIN = 20  # cents

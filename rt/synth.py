@@ -1,4 +1,5 @@
 import threading
+from time import time
 
 import jack
 import numpy as np
@@ -11,12 +12,12 @@ from rt.utils import load_checkpoint
 # TODO: this can easily be expanded to stereo by processing in batches of 2
 # Prepare zak
 zak = AutoEncoder()
-zak.load_state_dict(load_checkpoint(66))
+zak.load_state_dict(load_checkpoint(75))
 zak.eval()
 zak = zak.cuda()
 
 # Prepare network inputs
-hidden = torch.randn(3, 1, 512).cuda()
+hidden = torch.randn(zak.decoder.gru.num_layers, 1, 512).cuda()
 input_buffer = np.zeros(4096, dtype='float32')
 
 # Run once to buld the compuation graph
@@ -43,8 +44,12 @@ def process(frames):
         current_buffer = np.frombuffer(i.get_buffer(), dtype='float32')
         input_buffer[-2048:] = current_buffer
     for o in client.outports:
+        now = time()
         with torch.no_grad():
             o.get_buffer()[:], hidden[...] = zak.forward_live(input_buffer, hidden)
+        dur = time() - now
+        if dur >= 2048 / 44100:
+            print('missed a frame')
 
 
 @client.set_shutdown_callback

@@ -7,50 +7,8 @@ from torch.nn import functional as F  # noqa
 
 from config.default import Config
 from crepe import crepe
-from model.autoencoder.decoder import MLP
 
 default = Config()
-
-
-class HiddenMarkovModel:
-    def __init__(self):
-        super().__init__()
-        # Fixed priors for pitch tracking with CREPE
-        # uniform prior on the starting pitch
-        self.starting = torch.ones(360) / 360
-
-        # transition probabilities inducing continuous pitch
-        xx, yy = torch.meshgrid(torch.arange(360), torch.arange(360))
-        transition = torch.maximum(12 - abs(xx - yy), torch.zeros_like(xx))
-        self.transition = transition / torch.sum(transition, dim=1, keepdim=True)
-
-        # emission probability = fixed probability for self, evenly distribute the
-        # others
-        self_emission = 0.1
-        self.emission = (torch.eye(360) * self_emission + torch.ones((360, 360)) *
-                         ((1 - self_emission) / 360))
-
-
-class PitchTracker(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.input_mlp = MLP(360, 512, 1)
-        self.gru = nn.GRU(
-            input_size=512,
-            hidden_size=512,
-            num_layers=2,
-            batch_first=True,
-        )
-        self.output = nn.Linear(512, 1)
-
-    def forward(self, x):
-        z = self.input_mlp(x)
-        z, _ = self.gru(z)
-        z = F.relu(z)
-        z = self.output(z)
-        z = torch.tanh(z)
-
-        return z
 
 
 class F0Encoder(nn.Module):
@@ -130,14 +88,6 @@ class F0Encoder(nn.Module):
             freq, harmonicity, normalized_cents = self.pitch_argmax(probabilities)
 
             return freq, harmonicity, probabilities, normalized_cents
-
-    def pitch_viterbi(self, probability):
-        center = probability.argmax(dim=-1)
-        viterbi_path = torch.zeros_like(center)
-        for idx in range(viterbi_path.shape[0]):
-            viterbi_path[idx], _ = self.markov.viterbi_inference(center[idx])
-
-        return self.pitch_centered(viterbi_path.unsqueeze(-1), probability)
 
     def pitch_weighted(self, probabilities):
         center = probabilities.argmax(dim=-1, keepdim=True)

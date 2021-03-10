@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from config.default import Config
-
 
 default = Config()
 
@@ -157,12 +155,12 @@ class Decoder(nn.Module):
         c = self.modified_sigmoid(self.dense_harmonic(latent))
         a = self.modified_sigmoid(self.dense_loudness(latent))
 
-        H = self.dense_filter(latent)
-        H = self.modified_sigmoid(H)
+        noise_distribution = self.dense_filter(latent)
+        noise_distribution = self.modified_sigmoid(noise_distribution)
 
         if hidden is not None:
-            return dict(f0=batch["f0"], c=c, hidden=h, H=H, a=a), hidden
-        return dict(f0=batch["f0"], c=c, hidden=h, H=H, a=a)
+            return dict(f0=batch["f0"], c=c, hidden=h, H=noise_distribution, a=a), hidden
+        return dict(f0=batch["f0"], c=c, hidden=h, H=noise_distribution, a=a)
 
     @staticmethod
     def modified_sigmoid(a):
@@ -171,5 +169,3 @@ class Decoder(nn.Module):
         a = a.mul(2.0)
         a.add_(1e-7)
         return a
-
-
