@@ -6,6 +6,7 @@ from model.autoencoder.decoder import Decoder
 from model.autoencoder.encoder import Encoder
 from model.ddsp.filtered_noise import FilteredNoise
 from model.ddsp.harmonic_oscillator import OscillatorBank
+from model.ddsp.reverb import Reverb
 
 
 # TODO: Implement the following:
@@ -23,6 +24,7 @@ class AutoEncoder(nn.Module):
         self.decoder = Decoder()
         self.ddsp = OscillatorBank()
         self.noise = FilteredNoise()
+        self.reverb = Reverb()
 
     def forward(self, x):
         # TODO: fix magic numbers
@@ -33,6 +35,7 @@ class AutoEncoder(nn.Module):
         noise = self.noise(ctrl)
 
         signal = harmonics + noise
+        signal = self.reverb(signal)
 
         return signal
 
@@ -47,5 +50,6 @@ class AutoEncoder(nn.Module):
         noise = self.noise(ctrl)
 
         audio_hat = harmonics + noise
+        audio_hat = self.reverb.live_forward(audio_hat)
 
         return audio_hat.cpu().squeeze(0).numpy(), hidden

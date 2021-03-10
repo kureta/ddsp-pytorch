@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     data_dir = '/home/kureta/Music/violin'
-    example_duration = 2  # in seconds
+    example_duration = 1  # in seconds
     example_overlap = 0.5
     sample_rate = 44100
     n_fft = 2048
@@ -23,4 +23,4 @@ class Config:
     decoder_mlp_layers = 2
     decoder_gru_units = 512
     decoder_gru_layers = 3
-    batch_size = 32
+    batch_size = 16
