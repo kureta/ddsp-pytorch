@@ -11,7 +11,7 @@ from model.autoencoder.autoencoder import AutoEncoder
 default = Config()
 
 
-# TODO: finen-tune the way ddsp components are connected to each other and scaled
+# TODO: fine-tune the way ddsp components are connected to each other and scaled
 class Zak(pl.LightningModule):
     def __init__(self):
         super().__init__()

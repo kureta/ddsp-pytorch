@@ -12,6 +12,8 @@ from config.default import Config
 default = Config()
 
 
+# TODO: save pitches, loudnesses, and harmonicities to accelerate training.
+#       We can drop the encoder part for training, unless we use z-encoder
 class AudioData(Dataset):
     def __init__(self, conf=default, clear=False):
         dataset_path = conf.data_dir + '/audio_dataset.pth'
