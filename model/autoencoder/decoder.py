@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 
 from config.default import Config
+from model.ddsp.filtered_noise import FilteredNoise
+from model.ddsp.harmonic_oscillator import OscillatorBank
+from model.ddsp.reverb import Reverb
 
 default = Config()
 
@@ -131,3 +134,34 @@ class Decoder(nn.Module):
         a = a.mul(2.0)
         a.add_(1e-7)
         return a
+
+
+class DDSPDecoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.decoder = Decoder()
+        self.ddsp = OscillatorBank()
+        self.noise = FilteredNoise()
+        self.reverb = Reverb()
+
+    def forward(self, z):
+        ctrl = self.decoder(z)
+        harmonics = self.ddsp(ctrl)
+        noise = self.noise(ctrl)
+
+        signal = harmonics + noise
+        signal = self.reverb(signal)
+
+        return signal
+
+    # TODO: Every module should be responsible for keeping track of their own
+    #       internal state in a `forward_live` method
+    def forward_live(self, z, hidden):
+        ctrl, hidden = self.decoder(z, hidden)
+        harmonics = self.ddsp.live(ctrl)
+        noise = self.noise(ctrl)
+
+        audio_hat = harmonics + noise
+        audio_hat = self.reverb.live_forward(audio_hat)
+
+        return audio_hat.cpu().squeeze(0).numpy(), hidden

@@ -1,13 +1,15 @@
 import glob
 import os
+from collections import defaultdict
 
 import torch
 import torch.nn.functional as F  # noqa
 import torchaudio
-from torch.utils.data import Dataset  # noqa
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from config.default import Config
+from model.autoencoder.encoder import Encoder
 
 default = Config()
 
@@ -71,3 +73,44 @@ class AudioData(Dataset):
 
     def __len__(self):
         return self.audios.shape[0]
+
+
+class PLHDataset(Dataset):
+    def __init__(self, conf=default, clear=False):
+        dataset_path = conf.data_dir + '/plh_dataset.pth'
+        if os.path.exists(dataset_path) and not clear:
+            print('Loading presaved dataset...')
+            self.final = torch.load(dataset_path)
+            return
+
+        pls = []
+        audios = AudioData(conf)
+        audio_dl = DataLoader(audios, batch_size=conf.batch_size, shuffle=False, num_workers=4)
+        encoder = Encoder(conf).cuda()
+
+        for batch in audio_dl:
+            batch = batch.cuda()
+            data = encoder(F.pad(batch, (256 + 512, 256 + 512)))
+            for key, value in data.items():
+                data[key] = value.cpu()
+
+            data['audio'] = batch.cpu()
+            pls.append(data)
+
+        dd = defaultdict(list)
+        for batch in pls:
+            for key, value in batch.items():
+                dd[key].append(value)
+
+        self.final = {}
+        for key, value in dd.items():
+            self.final[key] = torch.cat(value, dim=0)
+
+        torch.save(self.final, dataset_path)
+        del encoder
+
+    def __getitem__(self, index):
+        return {key: val[index] for key, val in self.final.items()}
+
+    def __len__(self):
+        return len(self.final['f0'])
