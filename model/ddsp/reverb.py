@@ -2,14 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
-from config.default import Config
 from model.ddsp.filtered_noise import fft_convolve
-
-default = Config()
 
 
 class Reverb(nn.Module):
-    def __init__(self, conf=default, initial_wet=0, initial_decay=5):
+    def __init__(self, conf, initial_wet=0, initial_decay=5):
         super().__init__()
         self.length = conf.sample_rate
         self.sampling_rate = conf.sample_rate

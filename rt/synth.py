@@ -5,14 +5,16 @@ import jack
 import numpy as np
 import torch
 
+from config.default import Config
 from model.autoencoder.autoencoder import AutoEncoder
 from rt.utils import load_checkpoint
 
+default = Config()
 
 # TODO: this can easily be expanded to stereo by processing in batches of 2
 # Prepare zak
-zak = AutoEncoder()
-zak.decoder.load_state_dict(load_checkpoint(98))
+zak = AutoEncoder(default)
+zak.decoder.load_state_dict(load_checkpoint(7))
 zak.eval()
 zak = zak.cuda()
 

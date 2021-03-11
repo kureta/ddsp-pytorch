@@ -3,13 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
-from config.default import Config
-
-default = Config()
-
 
 class OscillatorBank(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
 
         self.n_harmonics = conf.n_harmonics

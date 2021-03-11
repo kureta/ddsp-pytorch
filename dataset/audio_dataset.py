@@ -8,16 +8,11 @@ import torchaudio
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from config.default import Config
 from model.autoencoder.encoder import Encoder
 
-default = Config()
 
-
-# TODO: save pitches, loudnesses, and harmonicities to accelerate training.
-#       We can drop the encoder part for training, unless we use z-encoder
 class AudioData(Dataset):
-    def __init__(self, conf=default, clear=False):
+    def __init__(self, conf, clear=False):
         dataset_path = conf.data_dir + '/audio_dataset.pth'
         if os.path.exists(dataset_path) and not clear:
             print('Loading presaved dataset...')
@@ -76,7 +71,7 @@ class AudioData(Dataset):
 
 
 class PLHDataset(Dataset):
-    def __init__(self, conf=default, clear=False):
+    def __init__(self, conf, clear=False):
         dataset_path = conf.data_dir + '/plh_dataset.pth'
         if os.path.exists(dataset_path) and not clear:
             print('Loading presaved dataset...')
@@ -84,12 +79,12 @@ class PLHDataset(Dataset):
             return
 
         pls = []
-        audios = AudioData(conf)
+        audios = AudioData(conf, clear)
         audio_dl = DataLoader(audios, batch_size=conf.batch_size, shuffle=False, num_workers=4)
         encoder = Encoder(conf).cuda()
         padding = conf.n_fft - conf.hop_length
 
-        for batch in audio_dl:
+        for batch in tqdm(audio_dl, 'Extracting f0 and loudness...'):
             batch = batch.cuda()
             data = encoder(F.pad(batch, (padding // 2, padding - padding // 2)))
             for key, value in data.items():

@@ -15,7 +15,7 @@ default = Config()
 class Zak(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.model = Decoder()
+        self.model = Decoder(default)
         self.loss = MSSLoss([2048, 1024, 512, 256, 128, 64])
 
     def configure_optimizers(self):
@@ -37,7 +37,7 @@ class Zak(pl.LightningModule):
 
 
 def main():
-    dataset = PLHDataset()
+    dataset = PLHDataset(default)
     train_loader = DataLoader(dataset, batch_size=default.batch_size, shuffle=True, num_workers=4)
     model = Zak()
     trainer = pl.Trainer(gpus=1, limit_val_batches=0.01, precision=16)

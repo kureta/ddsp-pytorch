@@ -3,10 +3,6 @@ import torch.fft as fft
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
-from config.default import Config
-
-default = Config()
-
 
 def amp_to_impulse_response(amp, target_size):
     amp = torch.stack([amp, torch.zeros_like(amp)], -1)
@@ -37,7 +33,7 @@ def fft_convolve(signal, kernel):
 
 
 class FilteredNoise(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
         self.block_size = conf.hop_length
 

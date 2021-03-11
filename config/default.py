@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    data_dir = '/home/kureta/Music/violin'
+    data_dir = '/home/kureta/Music/cello'
     example_duration = 1  # in seconds
     example_overlap = 0.5
     sample_rate = 44100

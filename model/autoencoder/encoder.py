@@ -7,14 +7,11 @@ from torch import nn
 import torchaudio
 from torch.nn import functional as F  # noqa
 
-from config.default import Config
 from crepe import crepe
-
-default = Config()
 
 
 class F0Encoder(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
         self.hop_length = conf.hop_length
         self.window_size = conf.n_fft
@@ -132,7 +129,7 @@ class F0Encoder(nn.Module):
 
 
 class LoudnessEncoder(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
         self.n_fft = conf.n_fft
         self.hop_length = conf.hop_length
@@ -160,12 +157,12 @@ class LoudnessEncoder(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
         self.conf = conf
 
-        self.f0_encoder = F0Encoder()
-        self.loudness_encoder = LoudnessEncoder()
+        self.f0_encoder = F0Encoder(conf)
+        self.loudness_encoder = LoudnessEncoder(conf)
 
     def forward(self, x):
         result = {}

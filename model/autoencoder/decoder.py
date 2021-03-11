@@ -1,12 +1,9 @@
 import torch
 import torch.nn as nn
 
-from config.default import Config
 from model.ddsp.filtered_noise import FilteredNoise
 from model.ddsp.harmonic_oscillator import OscillatorBank
 from model.ddsp.reverb import Reverb
-
-default = Config()
 
 
 class MLP(nn.Module):
@@ -42,54 +39,54 @@ class MLP(nn.Module):
 
 
 class Controller(nn.Module):
-    def __init__(self, config=default):
+    def __init__(self, conf):
         super().__init__()
 
-        self.config = config
+        self.config = conf
 
         self.mlp_f0 = MLP(
             n_input=1,
-            n_units=config.decoder_mlp_units,
-            n_layer=config.decoder_mlp_layers
+            n_units=conf.decoder_mlp_units,
+            n_layer=conf.decoder_mlp_layers
         )
         self.mlp_loudness = MLP(
             n_input=1,
-            n_units=config.decoder_mlp_units,
-            n_layer=config.decoder_mlp_layers
+            n_units=conf.decoder_mlp_units,
+            n_layer=conf.decoder_mlp_layers
         )
         self.mlp_harmonicity = MLP(
             n_input=1,
-            n_units=config.decoder_mlp_units,
-            n_layer=config.decoder_mlp_layers
+            n_units=conf.decoder_mlp_units,
+            n_layer=conf.decoder_mlp_layers
         )
 
-        if config.use_z:
+        if conf.use_z:
             self.mlp_z = MLP(
-                n_input=config.z_units,
-                n_units=config.decoder_mlp_units,
-                n_layer=config.decoder_mlp_layers
+                n_input=conf.z_units,
+                n_units=conf.decoder_mlp_units,
+                n_layer=conf.decoder_mlp_layers
             )
             self.num_mlp = 4
         else:
             self.num_mlp = 3
 
         self.gru = nn.GRU(
-            input_size=self.num_mlp * config.decoder_mlp_units,
-            hidden_size=config.decoder_gru_units,
-            num_layers=config.decoder_gru_layers,
+            input_size=self.num_mlp * conf.decoder_mlp_units,
+            hidden_size=conf.decoder_gru_units,
+            num_layers=conf.decoder_gru_layers,
             batch_first=True,
         )
 
         self.mlp_gru = MLP(
-            n_input=config.decoder_gru_units + self.num_mlp,
-            n_units=config.decoder_mlp_units,
-            n_layer=config.decoder_mlp_layers,
+            n_input=conf.decoder_gru_units + self.num_mlp,
+            n_units=conf.decoder_mlp_units,
+            n_layer=conf.decoder_mlp_layers,
         )
 
         # one element for overall loudness
-        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics)
-        self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
-        self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
+        self.dense_harmonic = nn.Linear(conf.decoder_mlp_units, conf.n_harmonics)
+        self.dense_loudness = nn.Linear(conf.decoder_mlp_units, 1)
+        self.dense_filter = nn.Linear(conf.decoder_mlp_units, conf.n_noise_filters)
 
     def forward(self, batch, hidden=None):
         f0 = batch['normalized_cents']
@@ -138,12 +135,12 @@ class Controller(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, conf):
         super().__init__()
-        self.controller = Controller()
-        self.harmonics = OscillatorBank()
-        self.noise = FilteredNoise()
-        self.reverb = Reverb()
+        self.controller = Controller(conf)
+        self.harmonics = OscillatorBank(conf)
+        self.noise = FilteredNoise(conf)
+        self.reverb = Reverb(conf)
 
     def forward(self, z):
         ctrl = self.controller(z)

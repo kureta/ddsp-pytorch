@@ -2,18 +2,15 @@ import torch
 from torch import nn
 from torch.nn import functional as F  # noqa
 
-from config.default import Config
 from model.autoencoder.encoder import Encoder
 from train.train import Decoder
 
-default = Config()
-
 
 class AutoEncoder(nn.Module):
-    def __init__(self, conf=default):
+    def __init__(self, conf):
         super().__init__()
-        self.encoder = Encoder()
-        self.decoder = Decoder()
+        self.encoder = Encoder(conf)
+        self.decoder = Decoder(conf)
         self.padding = conf.n_fft - conf.hop_length
         self.hop_legth = conf.hop_length
 
