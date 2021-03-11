@@ -7,19 +7,18 @@ default = Config()
 
 
 class MLP(nn.Module):
-    def __init__(self, n_input, n_units, n_layer, relu=nn.LeakyReLU, inplace=False):
+    def __init__(self, n_input, n_units, n_layer, relu=nn.LeakyReLU):
         super().__init__()
         self.n_layer = n_layer
         self.n_input = n_input
         self.n_units = n_units
-        self.inplace = inplace
 
         self.add_module(
             "mlp_layer1",
             nn.Sequential(
                 nn.Linear(n_input, n_units),
                 nn.LayerNorm(normalized_shape=n_units),
-                relu(inplace=self.inplace),
+                relu(),
             ),
         )
 
@@ -29,7 +28,7 @@ class MLP(nn.Module):
                 nn.Sequential(
                     nn.Linear(n_units, n_units),
                     nn.LayerNorm(normalized_shape=n_units),
-                    relu(inplace=self.inplace),
+                    relu(),
                 ),
             )
 
@@ -79,20 +78,19 @@ class Decoder(nn.Module):
         )
 
         self.mlp_gru = MLP(
-            n_input=config.decoder_gru_units,
+            n_input=config.decoder_gru_units + self.num_mlp,
             n_units=config.decoder_mlp_units,
             n_layer=config.decoder_mlp_layers,
-            inplace=False,
         )
 
         # one element for overall loudness
-        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics)
-        self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
+        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics + 1)
         self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
     def forward(self, batch, hidden=None):
         f0 = batch['normalized_cents']
         loudness = batch['loudness']
+        harmonicity = batch['harmonicity']
 
         if self.config.use_z:
             z = batch['z']
@@ -100,7 +98,7 @@ class Decoder(nn.Module):
 
         latent_f0 = self.mlp_f0(f0)
         latent_loudness = self.mlp_loudness(loudness)
-        latent_harmonicity = self.mlp_harmonicity(batch['harmonicity'])
+        latent_harmonicity = self.mlp_harmonicity(harmonicity)
 
         if self.config.use_z:
             latent = torch.cat((latent_f0, latent_z, latent_loudness, latent_harmonicity), dim=-1)
@@ -111,17 +109,20 @@ class Decoder(nn.Module):
             latent, h = self.gru(latent, hidden)
         else:
             latent, h = self.gru(latent)
+
+        latent = torch.cat((latent, f0, loudness, harmonicity), dim=-1)
         latent = self.mlp_gru(latent)
 
-        c = self.modified_sigmoid(self.dense_harmonic(latent))
-        a = self.modified_sigmoid(self.dense_loudness(latent))
+        harm = self.modified_sigmoid(self.dense_harmonic(latent))
+        harm_amps = harm[..., 1:]
+        total_harm_amp = harm[..., :1]
 
         noise_distribution = self.dense_filter(latent)
-        noise_distribution = self.modified_sigmoid(noise_distribution)
+        noise_distribution = self.modified_sigmoid(noise_distribution - 5)
 
         if hidden is not None:
-            return dict(f0=batch["f0"], c=c, hidden=h, H=noise_distribution, a=a), hidden
-        return dict(f0=batch["f0"], c=c, hidden=h, H=noise_distribution, a=a)
+            return dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp), hidden
+        return dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp)
 
     @staticmethod
     def modified_sigmoid(a):

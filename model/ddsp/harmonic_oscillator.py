@@ -25,13 +25,6 @@ class OscillatorBank(nn.Module):
             requires_grad=False
         )
 
-    def forward(self, x):
-        harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
-        phases = self.generate_phases(harmonics)
-        signal = self.generate_signal(harm_amps, x['a'], phases)
-
-        return signal
-
     def prepare_harmonics(self, f0, harm_amps, harm_stretch):
         harmonics = self.harmonics ** (1. + harm_stretch)
         # Hz (cycles per second)
@@ -42,6 +35,7 @@ class OscillatorBank(nn.Module):
         # zero out above nyquist
         mask = harmonics > self.sample_rate // 2
         harm_amps = harm_amps.masked_fill(mask, 0.)
+        harm_amps /= harm_amps.sum(-1, keepdim=True)
         harmonics *= 2 * np.pi  # radians per second
         harmonics /= self.sample_rate  # radians per sample
         harmonics = self.rescale(harmonics)
@@ -57,7 +51,7 @@ class OscillatorBank(nn.Module):
         loudness = self.rescale(loudness)
         harm_amps = self.rescale(harm_amps)
         signal = loudness * harm_amps * torch.sin(phases)
-        signal = torch.sum(signal, dim=2) / self.n_harmonics
+        signal = torch.sum(signal, dim=2)
         return signal
 
     def rescale(self, x):
@@ -65,8 +59,13 @@ class OscillatorBank(nn.Module):
                              scale_factor=self.hop_size,
                              mode='linear').permute(0, 2, 1)
 
-    # TODO: similarly to decoder, we can move this into forward
-    #       by keeping track of phases outside the class, like hidden for GRU
+    def forward(self, x):
+        harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
+        phases = self.generate_phases(harmonics)
+        signal = self.generate_signal(harm_amps, x['a'], phases)
+
+        return signal
+
     def live(self, x):
         f0 = x['f0']
         harm_amps = x['c']

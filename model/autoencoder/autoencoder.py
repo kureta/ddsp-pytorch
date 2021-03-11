@@ -9,14 +9,6 @@ from model.ddsp.harmonic_oscillator import OscillatorBank
 from model.ddsp.reverb import Reverb
 
 
-# TODO: Implement the following:
-#       * LoudnessExtractor (that takes frequencies into account)
-#       * Reverb (also real-time)
-
-# TODO: There is a problem in either the AutoEncoder or the OscillatorBank
-#       Frames have "seams" inbetween
-
-
 class AutoEncoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -39,8 +31,8 @@ class AutoEncoder(nn.Module):
 
         return signal
 
-    # TODO: similarly to the decoder, we can ad an if statement to forward
-    #       and drop this forward live
+    # TODO: Every module should be responsible for keeping track of their own
+    #       internal state in a `forward_live` method
     def forward_live(self, x, hidden):
         audio_in = torch.from_numpy(x).unsqueeze(0).cuda()
         # We are dropping those samples here

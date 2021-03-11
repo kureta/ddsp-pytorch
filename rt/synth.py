@@ -12,7 +12,7 @@ from rt.utils import load_checkpoint
 # TODO: this can easily be expanded to stereo by processing in batches of 2
 # Prepare zak
 zak = AutoEncoder()
-zak.load_state_dict(load_checkpoint(78))
+zak.load_state_dict(load_checkpoint(91))
 zak.eval()
 zak = zak.cuda()
 

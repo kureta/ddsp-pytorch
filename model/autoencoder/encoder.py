@@ -1,7 +1,9 @@
 import os
 
+import librosa
+import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 import torchaudio
 from torch.nn import functional as F  # noqa
 
@@ -132,12 +134,28 @@ class F0Encoder(nn.Module):
 class LoudnessEncoder(nn.Module):
     def __init__(self, conf=default):
         super().__init__()
-        self.conf = conf
+        self.n_fft = conf.n_fft
+        self.hop_length = conf.hop_length
+        self.sample_rate = conf.sample_rate
+        freqs = np.linspace(0, float(self.sample_rate) / 2, int(1 + self.n_fft // 2), endpoint=True, dtype='float32')
+        a_weight = librosa.A_weighting(freqs)
+        self.a_weight = nn.Parameter(torch.from_numpy(a_weight), requires_grad=False)
 
-    def forward(self, x):
-        x = x.unfold(1, self.conf.n_fft, self.conf.hop_length)
-        dbfs = 20 * torch.log10(torch.sum(torch.abs(x), dim=2) / self.conf.n_fft + 1e-10)
-        return (dbfs + 98) / 98
+    def forward(self, signal):
+        stft = torch.stft(
+            signal,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.n_fft,
+            center=False,
+            return_complex=True,
+        ).permute(0, 2, 1)
+        stft = torch.log(abs(stft) + 1e-7)
+        stft = stft + self.a_weight
+
+        loudness = torch.mean(stft, dim=-1, keepdim=True)
+
+        return loudness
 
 
 class Encoder(nn.Module):
@@ -151,7 +169,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         result = {}
         f0, harmonicity, probabilities, normalized_cents = self.f0_encoder(x)
-        loudness = self.loudness_encoder(x).unsqueeze(-1)
+        loudness = self.loudness_encoder(x)
         result['f0'] = f0
         result['harmonicity'] = harmonicity
         result['loudness'] = loudness
