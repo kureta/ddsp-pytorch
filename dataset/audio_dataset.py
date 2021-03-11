@@ -87,10 +87,11 @@ class PLHDataset(Dataset):
         audios = AudioData(conf)
         audio_dl = DataLoader(audios, batch_size=conf.batch_size, shuffle=False, num_workers=4)
         encoder = Encoder(conf).cuda()
+        padding = conf.n_fft - conf.hop_length
 
         for batch in audio_dl:
             batch = batch.cuda()
-            data = encoder(F.pad(batch, (256 + 512, 256 + 512)))
+            data = encoder(F.pad(batch, (padding // 2, padding - padding // 2)))
             for key, value in data.items():
                 data[key] = value.cpu()
 

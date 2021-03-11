@@ -41,7 +41,7 @@ class MLP(nn.Module):
         return x
 
 
-class Decoder(nn.Module):
+class Controller(nn.Module):
     def __init__(self, config=default):
         super().__init__()
 
@@ -87,7 +87,8 @@ class Decoder(nn.Module):
         )
 
         # one element for overall loudness
-        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics + 1)
+        self.dense_harmonic = nn.Linear(config.decoder_mlp_units, config.n_harmonics)
+        self.dense_loudness = nn.Linear(config.decoder_mlp_units, 1)
         self.dense_filter = nn.Linear(config.decoder_mlp_units, config.n_noise_filters)
 
     def forward(self, batch, hidden=None):
@@ -116,16 +117,16 @@ class Decoder(nn.Module):
         latent = torch.cat((latent, f0, loudness, harmonicity), dim=-1)
         latent = self.mlp_gru(latent)
 
-        harm = self.modified_sigmoid(self.dense_harmonic(latent))
-        harm_amps = harm[..., 1:]
-        total_harm_amp = harm[..., :1]
+        harm_amps = self.modified_sigmoid(self.dense_harmonic(latent))
+        total_harm_amp = self.modified_sigmoid(self.dense_loudness(latent))
 
         noise_distribution = self.dense_filter(latent)
         noise_distribution = self.modified_sigmoid(noise_distribution - 5)
 
+        controls = dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp)
         if hidden is not None:
-            return dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp), hidden
-        return dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp)
+            return controls, hidden
+        return controls
 
     @staticmethod
     def modified_sigmoid(a):
@@ -136,17 +137,17 @@ class Decoder(nn.Module):
         return a
 
 
-class DDSPDecoder(nn.Module):
+class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.decoder = Decoder()
-        self.ddsp = OscillatorBank()
+        self.controller = Controller()
+        self.harmonics = OscillatorBank()
         self.noise = FilteredNoise()
         self.reverb = Reverb()
 
     def forward(self, z):
-        ctrl = self.decoder(z)
-        harmonics = self.ddsp(ctrl)
+        ctrl = self.controller(z)
+        harmonics = self.harmonics(ctrl)
         noise = self.noise(ctrl)
 
         signal = harmonics + noise
@@ -157,8 +158,8 @@ class DDSPDecoder(nn.Module):
     # TODO: Every module should be responsible for keeping track of their own
     #       internal state in a `forward_live` method
     def forward_live(self, z, hidden):
-        ctrl, hidden = self.decoder(z, hidden)
-        harmonics = self.ddsp.live(ctrl)
+        ctrl, hidden = self.controller(z, hidden)
+        harmonics = self.harmonics.live(ctrl)
         noise = self.noise(ctrl)
 
         audio_hat = harmonics + noise

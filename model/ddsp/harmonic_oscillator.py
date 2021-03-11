@@ -25,10 +25,9 @@ class OscillatorBank(nn.Module):
             requires_grad=False
         )
 
-    def prepare_harmonics(self, f0, harm_amps, harm_stretch):
-        harmonics = self.harmonics ** (1. + harm_stretch)
+    def prepare_harmonics(self, f0, harm_amps):
         # Hz (cycles per second)
-        harmonics = harmonics.unsqueeze(0).unsqueeze(0).repeat(
+        harmonics = self.harmonics.unsqueeze(0).unsqueeze(0).repeat(
             f0.shape[0],
             f0.shape[1],
             1) * f0
@@ -60,7 +59,7 @@ class OscillatorBank(nn.Module):
                              mode='linear').permute(0, 2, 1)
 
     def forward(self, x):
-        harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'], 0.)
+        harmonics, harm_amps = self.prepare_harmonics(x['f0'], x['c'])
         phases = self.generate_phases(harmonics)
         signal = self.generate_signal(harm_amps, x['a'], phases)
 
@@ -69,10 +68,9 @@ class OscillatorBank(nn.Module):
     def live(self, x):
         f0 = x['f0']
         harm_amps = x['c']
-        harm_stretch = 0
         loudness = x['a']
 
-        harmonics, harm_amps = self.prepare_harmonics(f0, harm_amps, harm_stretch)
+        harmonics, harm_amps = self.prepare_harmonics(f0, harm_amps)
         harmonics[0, 0, :] += self.last_phases  # phase offset from last sample
         phases = self.generate_phases(harmonics)
         self.last_phases.data = phases[0, -1, :]  # update phase offset

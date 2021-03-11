@@ -12,12 +12,12 @@ from rt.utils import load_checkpoint
 # TODO: this can easily be expanded to stereo by processing in batches of 2
 # Prepare zak
 zak = AutoEncoder()
-zak.ddsp.load_state_dict(load_checkpoint(98))
+zak.decoder.load_state_dict(load_checkpoint(98))
 zak.eval()
 zak = zak.cuda()
 
 # Prepare network inputs
-hidden = torch.randn(zak.ddsp.decoder.gru.num_layers, 1, 512).cuda()
+hidden = torch.randn(zak.decoder.controller.gru.num_layers, 1, 512).cuda()
 input_buffer = np.zeros(4096, dtype='float32')
 
 # Run once to buld the compuation graph

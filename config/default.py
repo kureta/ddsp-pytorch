@@ -14,7 +14,7 @@ class Config:
     crepe_capacity = 'full'
     f_min = 20.
     f_max = 8000.
-    n_harmonics = 60
+    n_harmonics = 100
     n_noise_filters = 65
     use_z = False
     encoder_gru_units = 512

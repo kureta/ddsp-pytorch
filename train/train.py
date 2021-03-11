@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from config.default import Config
 from dataset.audio_dataset import PLHDataset
 from loss.mss_loss import MSSLoss
-from model.autoencoder.decoder import DDSPDecoder
+from model.autoencoder.decoder import Decoder
 
 default = Config()
 
@@ -15,7 +15,7 @@ default = Config()
 class Zak(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.model = DDSPDecoder()
+        self.model = Decoder()
         self.loss = MSSLoss([2048, 1024, 512, 256, 128, 64])
 
     def configure_optimizers(self):
