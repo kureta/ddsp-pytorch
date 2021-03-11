@@ -139,6 +139,7 @@ class LoudnessEncoder(nn.Module):
         self.sample_rate = conf.sample_rate
         freqs = np.linspace(0, float(self.sample_rate) / 2, int(1 + self.n_fft // 2), endpoint=True, dtype='float32')
         a_weight = librosa.A_weighting(freqs)
+        a_weight = 10 ** (a_weight / 10)
         self.a_weight = nn.Parameter(torch.from_numpy(a_weight), requires_grad=False)
 
     def forward(self, signal):
@@ -151,7 +152,7 @@ class LoudnessEncoder(nn.Module):
             return_complex=True,
         ).permute(0, 2, 1)
         stft = torch.log(abs(stft) + 1e-7)
-        stft = stft + self.a_weight
+        stft *= self.a_weight
 
         loudness = torch.mean(stft, dim=-1, keepdim=True)
 
