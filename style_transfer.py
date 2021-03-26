@@ -7,8 +7,8 @@ from torch import nn
 from torch.nn import functional as F  # noqa
 
 CONTENT_PATH = '/home/kureta/Music/gates/31232__thencamenow__metal-gate-03.aiff'
-STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
-# STYLE_PATH = '/home/kureta/Music/cello/Disk 1/01 Suite No. 1 in G major.flac.wav'
+# STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
+STYLE_PATH = '/home/kureta/Music/cello/Disk 1/01 Suite No. 1 in G major.flac.wav'
 
 
 def normalize_audio(x):
@@ -81,11 +81,21 @@ def main():
     content, content_length = prepare_spectra(CONTENT_PATH, sr, win_length, hop_length)
     style, _ = prepare_spectra(STYLE_PATH, sr, win_length, hop_length)
 
+    # Normalize spectra
+    elem_mean = np.mean(content)
+    elem_std = np.std(content)
+
+    mean = np.mean(style, axis=1, keepdims=True)
+    std = np.std(style, axis=1, keepdims=True)
+
+    content = (content - elem_mean) / elem_std
+    style = (style - elem_mean) / elem_std
+
     # trim to the shortest size
     length = min(content.shape[1], style.shape[1])
-    offset = 512 * 4
+    offset = style.shape[1] // 2
     content, style = content[:, :length], style[:, offset:offset + length]
-    # assert content.shape == style.shape
+
     n_channels = content.shape[0]
 
     content = torch.from_numpy(np.ascontiguousarray(content)).unsqueeze(0).cuda()
@@ -103,7 +113,7 @@ def main():
     net.add_module('style_loss', style_loss)
 
     alpha = 1
-    beta = 1e10
+    beta = 1e11
     lr = 1
     max_iter = 1000
 
@@ -117,22 +127,30 @@ def main():
 
         return loss
 
+    print('Started training')
     optimizer.step(closure)
-
     print('Done training')
+
     net.cpu()
     style.cpu()
     del net
     del style
 
     with torch.no_grad():
+        content = content * elem_std + elem_mean
+
+        _mean = torch.mean(content, dim=-1, keepdim=True)
+        _std = torch.std(content, dim=-1, keepdim=True)
+        content = (content - _mean) / _std
+        content = content * torch.from_numpy(std).cuda() + torch.from_numpy(mean).cuda()
+
         result = torch.exp(content) - 1
         result = torchaudio.functional.griffinlim(result,
                                                   window=torch.hann_window(win_length, True).cuda(),
                                                   n_fft=win_length,
                                                   hop_length=hop_length,
                                                   win_length=win_length,
-                                                  power=1, n_iter=1000, momentum=0.99,
+                                                  power=1, n_iter=5000, momentum=0.99,
                                                   length=content_length,
                                                   rand_init=True)
 
