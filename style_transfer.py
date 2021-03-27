@@ -6,9 +6,11 @@ import torchaudio
 from torch import nn
 from torch.nn import functional as F  # noqa
 
-CONTENT_PATH = '/home/kureta/Music/gates/31232__thencamenow__metal-gate-03.aiff'
-# STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
-STYLE_PATH = '/home/kureta/Music/cello/Disk 1/01 Suite No. 1 in G major.flac.wav'
+# CONTENT_PATH = '/home/kureta/Music/gates/31232__thencamenow__metal-gate-03.aiff'
+CONTENT_PATH = '/home/kureta/Music/haiku.mp3'
+STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
+# STYLE_PATH = '/home/kureta/Music/cello/Disk 1/01 Suite No. 1 in G major.flac.wav'
+# STYLE_PATH = '/home/kureta/Music/Haydn - String quartets Op 33 - Cuarteto Casals/CD 1/01-String Quartet op_33_1 - I_Allegro moderato.flac'
 
 
 def normalize_audio(x):
@@ -63,18 +65,21 @@ class StyleLoss(nn.Module):
 class FeatureExtractor(nn.Module):
     def __init__(self, in_ch, out_ch, size):
         super().__init__()
+        self.padding = (size - 1) // 2
         std = np.sqrt(2) * np.sqrt(2 / ((in_ch + out_ch) * size))
         kernel = torch.randn(out_ch, in_ch, size) * std
         self.register_buffer('conv_kernel', kernel)
 
     def forward(self, x):
-        y = F.conv1d(x, self.conv_kernel)
+        y = F.pad(x, (self.padding, self.padding))
+        y = F.conv1d(y, self.conv_kernel)
         y = F.relu(y)
 
         return y
 
 
 def main():
+    print('Preparing files...')
     sr = 44100
     win_length = 2048
     hop_length = 256
@@ -85,23 +90,24 @@ def main():
     elem_mean = np.mean(content)
     elem_std = np.std(content)
 
-    mean = np.mean(style, axis=1, keepdims=True)
-    std = np.std(style, axis=1, keepdims=True)
+    # mean = np.mean(style, axis=1, keepdims=True)
+    # std = np.std(style, axis=1, keepdims=True)
 
     content = (content - elem_mean) / elem_std
     style = (style - elem_mean) / elem_std
 
     # trim to the shortest size
     length = min(content.shape[1], style.shape[1])
-    offset = style.shape[1] // 2
-    content, style = content[:, :length], style[:, offset:offset + length]
+    offset = style.shape[1] // 8
+    content, style = content[:, :length], style[:, offset:offset + length * 4]
 
     n_channels = content.shape[0]
 
     content = torch.from_numpy(np.ascontiguousarray(content)).unsqueeze(0).cuda()
     style = torch.from_numpy(np.ascontiguousarray(style)).unsqueeze(0).cuda()
 
-    net = nn.Sequential(FeatureExtractor(n_channels, 4096, 11).cuda())
+    print('Preparing network...')
+    net = nn.Sequential(FeatureExtractor(n_channels, 4096, 17).cuda())
 
     with torch.no_grad():
         content_features = net(content)
@@ -113,7 +119,7 @@ def main():
     net.add_module('style_loss', style_loss)
 
     alpha = 1
-    beta = 1e11
+    beta = 1e13
     lr = 1
     max_iter = 1000
 
@@ -127,22 +133,22 @@ def main():
 
         return loss
 
-    print('Started training')
+    print('Training...')
     optimizer.step(closure)
-    print('Done training')
 
     net.cpu()
     style.cpu()
     del net
     del style
 
+    print('Griffin-Lim...')
     with torch.no_grad():
         content = content * elem_std + elem_mean
 
-        _mean = torch.mean(content, dim=-1, keepdim=True)
-        _std = torch.std(content, dim=-1, keepdim=True)
-        content = (content - _mean) / _std
-        content = content * torch.from_numpy(std).cuda() + torch.from_numpy(mean).cuda()
+        # _mean = torch.mean(content, dim=-1, keepdim=True)
+        # _std = torch.std(content, dim=-1, keepdim=True)
+        # content = (content - _mean) / _std
+        # content = content * torch.from_numpy(std).cuda() + torch.from_numpy(mean).cuda()
 
         result = torch.exp(content) - 1
         result = torchaudio.functional.griffinlim(result,
@@ -154,7 +160,7 @@ def main():
                                                   length=content_length,
                                                   rand_init=True)
 
-    print('Done Griffin-Lim')
+    print('Writing result to file...')
     result = result.cpu().numpy()[0]
     result = normalize_audio(result)
     soundfile.write('/home/kureta/Music/bok/anan.wav', result, sr)
