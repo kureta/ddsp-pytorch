@@ -41,16 +41,17 @@ event = threading.Event()
 def process(frames):
     assert len(client.inports) == len(client.outports)
     assert frames == client.blocksize
-    input_buffer[:2048] = input_buffer[-2048:]
+    input_buffer[:-frames] = input_buffer[frames:]
     for i in client.inports:
         current_buffer = np.frombuffer(i.get_buffer(), dtype='float32')
-        input_buffer[-2048:] = current_buffer
+        input_buffer[-frames:] = current_buffer
     for o in client.outports:
         now = time()
         with torch.no_grad():
-            o.get_buffer()[:], hidden[...] = zak.forward_live(input_buffer, hidden)
+            out_signal, hidden[...] = zak.forward_live(input_buffer, hidden)
+            o.get_buffer()[:] = out_signal[-frames:]
         dur = time() - now
-        if dur >= 2048 / 44100:
+        if dur >= frames / 44100:
             print('missed a frame')
 
 

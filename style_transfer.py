@@ -7,10 +7,13 @@ from torch import nn
 from torch.nn import functional as F  # noqa
 
 # CONTENT_PATH = '/home/kureta/Music/gates/31232__thencamenow__metal-gate-03.aiff'
-CONTENT_PATH = '/home/kureta/Music/haiku.mp3'
-STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
+# CONTENT_PATH = '/home/kureta/Music/haiku.mp3'
+# STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
 # STYLE_PATH = '/home/kureta/Music/cello/Disk 1/01 Suite No. 1 in G major.flac.wav'
 # STYLE_PATH = '/home/kureta/Music/Haydn - String quartets Op 33 - Cuarteto Casals/CD 1/01-String Quartet op_33_1 - I_Allegro moderato.flac'
+
+CONTENT_PATH = '/home/kureta/Documents/Stasis/path of least resistance/Path of Least Resistance - Voice/samples/Audio 1-7.wav'
+STYLE_PATH = '/home/kureta/Music/Grisey Partiels Asko.mp3'
 
 
 def normalize_audio(x):
@@ -90,9 +93,6 @@ def main():
     elem_mean = np.mean(content)
     elem_std = np.std(content)
 
-    # mean = np.mean(style, axis=1, keepdims=True)
-    # std = np.std(style, axis=1, keepdims=True)
-
     content = (content - elem_mean) / elem_std
     style = (style - elem_mean) / elem_std
 
@@ -144,11 +144,6 @@ def main():
     print('Griffin-Lim...')
     with torch.no_grad():
         content = content * elem_std + elem_mean
-
-        # _mean = torch.mean(content, dim=-1, keepdim=True)
-        # _std = torch.std(content, dim=-1, keepdim=True)
-        # content = (content - _mean) / _std
-        # content = content * torch.from_numpy(std).cuda() + torch.from_numpy(mean).cuda()
 
         result = torch.exp(content) - 1
         result = torchaudio.functional.griffinlim(result,

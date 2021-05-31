@@ -54,21 +54,8 @@ class Controller(nn.Module):
             n_units=conf.decoder_mlp_units,
             n_layer=conf.decoder_mlp_layers
         )
-        self.mlp_harmonicity = MLP(
-            n_input=1,
-            n_units=conf.decoder_mlp_units,
-            n_layer=conf.decoder_mlp_layers
-        )
 
-        if conf.use_z:
-            self.mlp_z = MLP(
-                n_input=conf.z_units,
-                n_units=conf.decoder_mlp_units,
-                n_layer=conf.decoder_mlp_layers
-            )
-            self.num_mlp = 4
-        else:
-            self.num_mlp = 3
+        self.num_mlp = 2
 
         self.gru = nn.GRU(
             input_size=self.num_mlp * conf.decoder_mlp_units,
@@ -78,7 +65,7 @@ class Controller(nn.Module):
         )
 
         self.mlp_gru = MLP(
-            n_input=conf.decoder_gru_units + self.num_mlp,
+            n_input=conf.decoder_gru_units + self.num_mlp * conf.decoder_mlp_units,
             n_units=conf.decoder_mlp_units,
             n_layer=conf.decoder_mlp_layers,
         )
@@ -87,38 +74,33 @@ class Controller(nn.Module):
         self.dense_harmonic = nn.Linear(conf.decoder_mlp_units, conf.n_harmonics)
         self.dense_loudness = nn.Linear(conf.decoder_mlp_units, 1)
         self.dense_filter = nn.Linear(conf.decoder_mlp_units, conf.n_noise_filters)
+        # self.dense_filter_loudness = nn.Linear(conf.decoder_mlp_units, 1)
 
     def forward(self, batch, hidden=None):
         f0 = batch['normalized_cents']
         loudness = batch['loudness']
-        harmonicity = batch['harmonicity']
-
-        if self.config.use_z:
-            z = batch['z']
-            latent_z = self.mlp_z(z)
 
         latent_f0 = self.mlp_f0(f0)
         latent_loudness = self.mlp_loudness(loudness)
-        latent_harmonicity = self.mlp_harmonicity(harmonicity)
 
-        if self.config.use_z:
-            latent = torch.cat((latent_f0, latent_z, latent_loudness, latent_harmonicity), dim=-1)
-        else:
-            latent = torch.cat((latent_f0, latent_loudness, latent_harmonicity), dim=-1)
+        latent = torch.cat((latent_f0, latent_loudness), dim=-1)
 
         if hidden is not None:
             latent, h = self.gru(latent, hidden)
         else:
             latent, h = self.gru(latent)
 
-        latent = torch.cat((latent, f0, loudness, harmonicity), dim=-1)
+        latent = torch.cat((latent, latent_f0, latent_loudness), dim=-1)
         latent = self.mlp_gru(latent)
 
         harm_amps = self.modified_sigmoid(self.dense_harmonic(latent))
         total_harm_amp = self.modified_sigmoid(self.dense_loudness(latent))
 
         noise_distribution = self.dense_filter(latent)
-        noise_distribution = self.modified_sigmoid(noise_distribution - 5)
+        noise_distribution = self.modified_sigmoid(noise_distribution)
+        # noise_loudness = self.dense_filter_loudness(latent)
+
+        # noise_distribution *= noise_loudness
 
         controls = dict(f0=batch["f0"], c=harm_amps, hidden=h, H=noise_distribution, a=total_harm_amp)
         if hidden is not None:

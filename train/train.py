@@ -20,7 +20,14 @@ class Zak(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
+        return {
+                'optimizer': optimizer,
+                'lr_scheduler': {
+                    'scheduler': scheduler,
+                    'monitor': 'train_loss',
+                    }
+                }
 
     def training_step(self, x, batch_idx):
         x_hat = self.model(x)
