@@ -3,9 +3,11 @@ from dataclasses import dataclass
 
 # v11 = cello
 # v12 = violin
+# v16 = viola
+# v17 = flute
 @dataclass
 class Config:
-    data_dir = '/home/kureta/Music/viola'
+    data_dir = '/home/kureta/Music/flute'
     example_duration = 2  # in seconds
     example_overlap = 0.5
     sample_rate = 44100

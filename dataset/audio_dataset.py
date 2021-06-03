@@ -21,6 +21,7 @@ class AudioData(Dataset):
 
         files = glob.glob(conf.data_dir + '/**/*.wav')
         files += glob.glob(conf.data_dir + '/**/*.mp3')
+        files += glob.glob(conf.data_dir + '/**/*.ogg')
         if len(files) == 0:
             raise ValueError('No valid audio files found!')
 
